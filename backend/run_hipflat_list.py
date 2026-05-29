@@ -75,6 +75,17 @@ def parse_snippet(snippet, listing_type):
     og_image = snippet.css("meta[property='og:image']::attr(content)").get("")
     if not images and og_image:
         images = [og_image]
+    images = snippet.css(".snippet-images img::attr(src)").getall()
+    # Deduplicate and filter
+    seen = set()
+    unique_images = []
+    for img in images:
+        if img and img not in seen:
+            seen.add(img)
+            unique_images.append(img)
+    og_image = snippet.css("meta[property='og:image']::attr(content)").get("")
+    if not unique_images and og_image:
+        unique_images = [og_image]
 
     district = loc.replace("Chiang Mai", "").replace(",", "").strip()
     if not district and "Mueang" in loc:
@@ -96,7 +107,7 @@ def parse_snippet(snippet, listing_type):
         "floor_area": floor_area,
         "property_type": prop_type,
         "description": desc,
-        "images": images[:5],
+        "images": unique_images[:5],
         "crawled_at": datetime.utcnow().isoformat(),
     }
 
