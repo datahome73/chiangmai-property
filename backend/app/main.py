@@ -64,7 +64,7 @@ async def health():
 
 # ─── Serve Frontend Static Files (Production) ─────────────
 # In production, the built Vue app is served by FastAPI
-frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
+frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend-react/dist")
 if settings.ENV == "production" and os.path.isdir(frontend_dist):
     from fastapi.responses import FileResponse
 

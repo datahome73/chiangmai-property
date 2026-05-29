@@ -14,14 +14,14 @@
 - **房源详情** — 图片轮播、价格曲线、配套设施、地图定位
 - **收藏对比** — 注册后可收藏房源、保存对比组合
 - **PWA 支持** — 可安装到手机桌面，原生应用体验
-- **移动优先** — 基于 Vant UI 的移动端适配设计
+- **移动优先** — 基于 antd-mobile 的移动端适配设计
 
 ## 🏗 技术栈
 
 | 层 | 技术 |
 |---|---|
 | **后端** | FastAPI + SQLAlchemy 2.0 (async) + Pydantic |
-| **前端** | Vue 3 + Vite + Vant 4 + Leaflet |
+| **前端** | React 18 + Vite + antd-mobile + Leaflet |
 | **数据库** | SQLite（开发）/ PostgreSQL（生产） |
 | **爬虫** | ScrapingAnt 代理 API + 自定义 HTML 解析器 |
 | **部署** | Railway（Docker 多阶段构建） |
@@ -44,13 +44,14 @@ chiangmai-property/
 │   │   └── parsers.py           # HTML 解析器
 │   ├── run_hipflat_list.py      # ✅ 主爬虫脚本
 │   └── main.py                  # 应用入口
-├── frontend/                    # Vue 3 前端
-│   ├── src/
-│   │   ├── views/               # 9 个页面组件
-│   │   ├── stores/              # Pinia 状态管理
-│   │   ├── components/          # 通用组件
-│   │   └── router/              # 路由配置
-│   └── vite.config.js
+├── frontend-react/                 # React 18 前端
+  ├── src/
+  │   ├── pages/                 # 9 个页面组件
+  │   ├── stores/                # Zustand 状态管理
+  │   ├── components/            # 通用组件 (PropertyCard)
+  │   ├── api/                   # Axios API 客户端
+  │   └── styles/                # 全局样式
+  └── vite.config.js
 ├── Dockerfile                   # Railway 多阶段构建
 └── railway.json                 # 部署配置
 ```
@@ -78,7 +79,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ### 2. 前端启动
 
 ```bash
-cd frontend
+cd frontend-react
 
 npm install
 

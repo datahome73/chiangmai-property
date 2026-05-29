@@ -2,9 +2,9 @@
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json* ./
+COPY frontend-react/package.json frontend-react/package-lock.json* ./
 RUN npm ci
-COPY frontend/ ./
+COPY frontend-react/ ./
 RUN npm run build
 
 # ===== Stage 2: Build Backend =====
@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 
 # Copy built frontend from stage 1
-COPY --from=frontend-builder /app/dist/ ./frontend/dist/
+COPY --from=frontend-builder /app/dist/ ./frontend-react/dist/
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
