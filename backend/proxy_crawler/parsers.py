@@ -182,15 +182,15 @@ class DdpropertyParser(BaseParser):
 
         # Property type
         if "condo" in all_text or "คอนโด" in all_text:
-            data["property_type"] = "condo"
+            data["property_type"] = "CONDO"
         elif "house" in all_text or "บ้าน" in all_text or "villa" in all_text:
-            data["property_type"] = "house"
+            data["property_type"] = "HOUSE"
         elif "townhouse" in all_text or "ทาวน์เฮาส์" in all_text:
-            data["property_type"] = "townhouse"
+            data["property_type"] = "TOWNHOUSE"
         elif "apartment" in all_text:
-            data["property_type"] = "apartment"
+            data["property_type"] = "APARTMENT"
         else:
-            data["property_type"] = "condo"
+            data["property_type"] = "CONDO"
 
         # Furnishing
         if "fully furnished" in all_text or "fully-furnished" in all_text or "เฟอร์นิเจอร์ครบ" in all_text:
@@ -326,13 +326,13 @@ class HipflatParser(BaseParser):
         # Property type from snippet-info
         prop_type = sel.css(".snippet-info::text").get("").strip().lower()
         if "condo" in prop_type or "apartment" in prop_type:
-            data["property_type"] = "condo"
+            data["property_type"] = "CONDO"
         elif "house" in prop_type or "villa" in prop_type:
-            data["property_type"] = "house"
+            data["property_type"] = "HOUSE"
         elif "townhouse" in prop_type:
-            data["property_type"] = "townhouse"
+            data["property_type"] = "TOWNHOUSE"
         else:
-            data["property_type"] = prop_type or "condo"
+            data["property_type"] = prop_type or "CONDO"
 
         # Furnishing
         if "fully furnished" in all_text:
@@ -504,18 +504,18 @@ class FazwazParser(BaseParser):
             elif "type" in k or "property" in k:
                 pt = v.lower()
                 if "condo" in pt or "apartment" in pt:
-                    data["property_type"] = "condo"
+                    data["property_type"] = "CONDO"
                 elif "house" in pt or "villa" in pt:
-                    data["property_type"] = "house"
+                    data["property_type"] = "HOUSE"
                 elif "townhouse" in pt:
-                    data["property_type"] = "townhouse"
+                    data["property_type"] = "TOWNHOUSE"
 
         all_text = " ".join(sel.css("*::text").getall()).lower()
         if "property_type" not in data:
-            if "condo" in all_text: data["property_type"] = "condo"
-            elif "house" in all_text or "villa" in all_text: data["property_type"] = "house"
-            elif "townhouse" in all_text: data["property_type"] = "townhouse"
-            else: data["property_type"] = "condo"
+            if "condo" in all_text: data["property_type"] = "CONDO"
+            elif "house" in all_text or "villa" in all_text: data["property_type"] = "HOUSE"
+            elif "townhouse" in all_text: data["property_type"] = "TOWNHOUSE"
+            else: data["property_type"] = "CONDO"
 
         desc = sel.css("[class*='description'] *::text").get("") or sel.css("meta[name='description']::attr(content)").get("")
         if desc:

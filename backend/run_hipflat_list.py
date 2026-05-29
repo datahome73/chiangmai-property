@@ -61,10 +61,10 @@ def parse_snippet(snippet, listing_type):
     if area: floor_area = float(area.group(1))
 
     prop_type = snippet.css(".snippet-info::text").get("").strip().lower()
-    if "condo" in prop_type or "apartment" in prop_type: prop_type = "condo"
-    elif "house" in prop_type or "villa" in prop_type: prop_type = "house"
-    elif "townhouse" in prop_type: prop_type = "townhouse"
-    else: prop_type = "condo"
+    if "condo" in prop_type or "apartment" in prop_type: prop_type = "CONDO"
+    elif "house" in prop_type or "villa" in prop_type: prop_type = "HOUSE"
+    elif "townhouse" in prop_type: prop_type = "TOWNHOUSE"
+    else: prop_type = "CONDO"
 
     desc1 = snippet.css(".snippet-description-1 *::text").getall()
     desc2 = snippet.css(".snippet-description-2 *::text").getall()
@@ -107,7 +107,7 @@ def crawl():
     seen_ids = set()
 
     for url in URLS:
-        listing_type = "sale" if "for-sale" in url else "rent"
+        listing_type = "SALE" if "for-sale" in url else "RENT"
         logger.info(f"\n=== {url} ===")
         html = fetch(url)
         sel = Selector(text=html)
@@ -157,8 +157,8 @@ def save_to_db(properties):
                         WHERE source='hipflat' AND source_id=:sid"""),
                     {
                         "title": prop.get("title", ""),
-                        "price_rent": prop["price"] if prop.get("listing_type") == "rent" else None,
-                        "price_sale": prop["price"] if prop.get("listing_type") == "sale" else None,
+                        "price_rent": prop["price"] if prop.get("listing_type") == "RENT" else None,
+                        "price_sale": prop["price"] if prop.get("listing_type") == "SALE" else None,
                         "beds": prop.get("bedrooms"), "baths": prop.get("bathrooms"),
                         "area": prop.get("floor_area"), "ptype": prop.get("property_type", "condo"),
                         "addr": prop.get("location_name", ""), "district": prop.get("district", ""),
@@ -182,9 +182,9 @@ def save_to_db(properties):
                     {
                         "title": prop.get("title", ""),
                         "desc": prop.get("description", ""),
-                        "price_rent": prop["price"] if prop.get("listing_type") == "rent" else None,
-                        "price_sale": prop["price"] if prop.get("listing_type") == "sale" else None,
-                        "price_type": prop.get("listing_type", "rent"),
+                        "price_rent": prop["price"] if prop.get("listing_type") == "RENT" else None,
+                        "price_sale": prop["price"] if prop.get("listing_type") == "SALE" else None,
+                        "price_type": prop.get("listing_type", "RENT"),
                         "beds": prop.get("bedrooms"), "baths": prop.get("bathrooms"),
                         "area": prop.get("floor_area"), "ptype": prop.get("property_type", "condo"),
                         "addr": prop.get("location_name", ""), "district": prop.get("district", ""),
