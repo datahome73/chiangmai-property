@@ -51,15 +51,17 @@ def discover(spider_name: str, adapter, parser, pages: int = 1):
     site_configs = {
         "ddproperty": {
             "list_urls": [
-                "https://www.ddproperty.com/%E0%B9%83%E0%B8%AB%E0%B9%89%E0%B9%80%E0%B8%8A%E0%B9%88%E0%B8%B2/%E0%B9%80%E0%B8%8A%E0%B8%B5%E0%B8%A2%E0%B8%87%E0%B9%83%E0%B8%AB%E0%B8%A1%E0%B9%88",
-                "https://www.ddproperty.com/%E0%B8%82%E0%B8%B2%E0%B8%A2/%E0%B9%80%E0%B8%8A%E0%B8%B5%E0%B8%A2%E0%B8%87%E0%B9%83%E0%B8%AB%E0%B8%A1%E0%B9%88",
+                "https://www.ddproperty.com/ให้เช่า/เชียงใหม่",
+                "https://www.ddproperty.com/ขาย/เชียงใหม่",
             ],
             "detail_url": None,
         },
         "hipflat": {
             "list_urls": [
-                "https://www.hipflat.co.th/en/for-rent/chiang-mai",
-                "https://www.hipflat.co.th/en/for-sale/chiang-mai",
+                "https://www.hipflat.co.th/en/condo-for-rent/chiang-mai",
+                "https://www.hipflat.co.th/en/condo-for-sale/chiang-mai",
+                "https://www.hipflat.co.th/en/house-for-rent/chiang-mai",
+                "https://www.hipflat.co.th/en/house-for-sale/chiang-mai",
             ],
             "detail_url": None,
         },
@@ -121,8 +123,10 @@ def crawl(spider_name: str, adapter, parser, pages: int = 5, db_session=None):
             "https://www.ddproperty.com/ขาย/เชียงใหม่",
         ],
         "hipflat": [
-            "https://www.hipflat.co.th/en/for-rent/chiang-mai",
-            "https://www.hipflat.co.th/en/for-sale/chiang-mai",
+            "https://www.hipflat.co.th/en/condo-for-rent/chiang-mai",
+            "https://www.hipflat.co.th/en/condo-for-sale/chiang-mai",
+            "https://www.hipflat.co.th/en/house-for-rent/chiang-mai",
+            "https://www.hipflat.co.th/en/house-for-sale/chiang-mai",
         ],
         "fazwaz": [
             "https://www.fazwaz.com/property-for-rent/chiang-mai",

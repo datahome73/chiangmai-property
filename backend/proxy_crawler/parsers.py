@@ -229,38 +229,39 @@ class HipflatParser(BaseParser):
     SOURCE = "hipflat"
     BASE_URL = "https://www.hipflat.co.th"
 
-    LISTING_URL_SELECTORS = [
-        "a[href*='/en/listing/']::attr(href)",
-        "a[href*='/en/property/']::attr(href)",
-        "a[class*='listing-item']::attr(href)",
-    ]
-    NEXT_PAGE_SELECTORS = [
-        "a[rel='next']::attr(href)",
-        "a[class*='pagination__next']::attr(href)",
-        "a[aria-label='Next']::attr(href)",
-        "li.next a::attr(href)",
-    ]
-
     def parse_list_urls(self, html: str, base_url: str) -> List[str]:
         sel = Selector(text=html)
         urls = set()
-        for selector in self.LISTING_URL_SELECTORS:
-            for href in sel.css(selector).getall():
+        # Each listing is in a div.snippet with an <a> link
+        for snippet in sel.css("div.snippet"):
+            href = snippet.css("a::attr(href)").get("")
+            title = snippet.css("a::attr(title)").get("")
+            if href and "chiang" in (title + href).lower():
                 full_url = urljoin(self.BASE_URL, href)
-                if full_url and self.BASE_URL in full_url:
-                    urls.add(full_url)
-        logger.info(f"  📋 找到 {len(urls)} 个房源链接")
+                urls.add(full_url)
+        logger.info(f"  📋 找到 {len(urls)} 个清迈房源链接")
         return list(urls)
 
     def parse_next_page(self, html: str, base_url: str) -> Optional[str]:
         sel = Selector(text=html)
-        for selector in self.NEXT_PAGE_SELECTORS:
-            href = sel.css(selector).get()
-            if href:
-                return urljoin(self.BASE_URL, href)
+        # Pagination: <li class="page" data-value="N"> — get current, then next
+        current = sel.css("li.page-current::attr(data-value)").get("")
+        if not current:
+            current = sel.css("li.page.current::attr(data-value)").get("")
+            if not current:
+                current = sel.css("li.page.active::attr(data-value)").get("")
+        if current:
+            try:
+                next_page = int(current) + 1
+                # Build next page URL from base (removing any existing page param)
+                clean_url = re.sub(r"\?page=\d+", "", base_url)
+                return f"{clean_url}?page={next_page}"
+            except ValueError:
+                pass
         return None
 
     def parse_listing(self, html: str, url: str) -> Optional[Dict]:
+        """解析 HipFlat 详情页 HTML"""
         sel = Selector(text=html)
         data = {
             "source": self.SOURCE,
@@ -268,82 +269,95 @@ class HipflatParser(BaseParser):
             "crawled_at": datetime.utcnow().isoformat(),
         }
 
-        id_match = re.search(r"/listing/(\d+)", url) or re.search(r"/property/(\d+)", url)
-        data["source_id"] = id_match.group(1) if id_match else ""
+        # Source ID from /en/ads/CODE
+        id_match = re.search(r"/ads/([a-z0-9]+)", url)
+        data["source_id"] = id_match.group(1) if id_match else url.rstrip("/").split("/")[-1]
 
         data["listing_type"] = "rent" if "for-rent" in url else "sale"
 
-        # Title
-        for s in ["h1::text", "[data-test='title']::text", "[class*='project-name']::text"]:
-            t = sel.css(s).get("").strip()
-            if t:
-                data["title"] = t
-                break
-
-        # Price
-        for s in [
-            "[class*='price'] span::text",
-            "[data-test='price'] span::text",
-            "[class*='listing-price']::text",
-            "meta[property='product:price:amount']::attr(content)",
-        ]:
-            p = sel.css(s).get("")
-            if p and re.search(r"\d", p):
-                data["original_price_text"] = p.strip()
-                data["price"] = self._clean_price(p)
-                break
-
-        # Location
-        for s in ["[class*='location']::text", "[data-test='location']::text", "[itemprop='address']::attr(content)"]:
-            loc = sel.css(s).get("")
-            if loc:
-                data["location_name"] = loc.strip()
-                parts = [p.strip() for p in loc.split(",")]
-                if len(parts) >= 1:
-                    data["province"] = "Chiang Mai"
-                    data["district"] = parts[0] if "Chiang" not in parts[0] else ""
-                if len(parts) >= 2:
-                    data["subdistrict"] = parts[-2].strip()
-                break
-
         all_text = " ".join(sel.css("*::text").getall()).lower()
+        data["all_text"] = all_text
 
-        bed = re.search(r"(\d+)\s*(?:bed|bedroom)", all_text, re.I)
-        if bed: data["bedrooms"] = int(bed.group(1))
+        # Title from <h1> or og:title
+        title = sel.css("h1::text").get("").strip()
+        if not title:
+            title = sel.css("meta[property='og:title']::attr(content)").get("")
+        data["title"] = title
 
-        bath = re.search(r"(\d+)\s*(?:bath|bathroom)", all_text, re.I)
-        if bath: data["bathrooms"] = int(bath.group(1))
+        # Price — look for snippet-price or any price text
+        price_text = sel.css(".snippet-price::text").get("")
+        if not price_text:
+            price_text = sel.css("[class*='price']::text, [data-test='price']::text").get("")
+        if price_text and re.search(r"\d", price_text):
+            data["original_price_text"] = price_text.strip()
+            # Strip currency prefix
+            clean = re.sub(r"^[A-Z]{3}\s*", "", price_text)
+            data["price"] = self._clean_price(clean)
 
-        area = re.search(r"(\d+(?:\.\d+)?)\s*(?:sq\.?\s*m|m²|sqm)", all_text, re.I)
-        if area: data["floor_area"] = float(area.group(1))
+        # Location from snippet-address or detail page
+        loc = sel.css(".snippet-address::text").get("")
+        if not loc:
+            loc = sel.css("[class*='address']::text, [class*='location']::text").get("")
+        if loc:
+            data["location_name"] = loc.strip()
+            parts = [p.strip() for p in loc.split(",")]
+            data["province"] = "Chiang Mai"
+            if len(parts) >= 1:
+                data["district"] = parts[0] if "Mueang" in parts[0] or "Chiang" not in parts[0] else ""
+            if len(parts) >= 2:
+                data["subdistrict"] = parts[-2].strip()
 
-        floor = re.search(r"(?:floor|level)\s*(\d+)", all_text, re.I)
-        if floor: data["floor_number"] = int(floor.group(1))
+        # Bedrooms, Bathrooms, Area from summary classes
+        summary_texts = sel.css(".snippet-summary *::text").getall()
+        summary = " ".join(summary_texts)
 
-        if "condo" in all_text or "apartment" in all_text:
+        bed = re.search(r"(\d+)\s*(?:bed|bedroom|Bed)", summary, re.I)
+        if bed:
+            data["bedrooms"] = int(bed.group(1))
+
+        bath = re.search(r"(\d+)\s*(?:bath|bathroom|Bath)", summary, re.I)
+        if bath:
+            data["bathrooms"] = int(bath.group(1))
+
+        area = re.search(r"(\d+(?:\.\d+)?)\s*(?:sq\.?\s*m|m²|sqm|Sq\.?\s*[Mm])", summary, re.I)
+        if area:
+            data["floor_area"] = float(area.group(1))
+
+        # Property type from snippet-info
+        prop_type = sel.css(".snippet-info::text").get("").strip().lower()
+        if "condo" in prop_type or "apartment" in prop_type:
             data["property_type"] = "condo"
-        elif "house" in all_text or "villa" in all_text:
+        elif "house" in prop_type or "villa" in prop_type:
             data["property_type"] = "house"
-        elif "townhouse" in all_text:
+        elif "townhouse" in prop_type:
             data["property_type"] = "townhouse"
         else:
-            data["property_type"] = "condo"
+            data["property_type"] = prop_type or "condo"
 
+        # Furnishing
         if "fully furnished" in all_text:
             data["furnishing"] = "Fully Furnished"
         elif "unfurnished" in all_text:
             data["furnishing"] = "Unfurnished"
 
-        desc = sel.css("[class*='description'] *::text").get("") or sel.css("meta[name='description']::attr(content)").get("")
-        if desc:
-            data["description"] = re.sub(r"\s+", " ", desc).strip()
+        # Description from snippet-description
+        desc1 = sel.css(".snippet-description-1 *::text, .snippet-description-2 *::text").getall()
+        desc2 = sel.css("[class*='description'] *::text").getall()
+        desc_text = " ".join(desc1 or desc2)
+        if not desc_text:
+            desc_text = sel.css("meta[name='description']::attr(content)").get("")
+        if desc_text:
+            data["description"] = re.sub(r"\s+", " ", desc_text).strip()
 
+        # Images
         images = sel.css(
-            "[class*='gallery'] img::attr(src), " 
-            "[data-test='photo'] img::attr(src), "
-            "img[class*='gallery']::attr(src)"
-        ).getall() or sel.css("meta[property='og:image']::attr(content)").getall()
-        data["images"] = [urljoin(self.BASE_URL, u) for u in images if u][:20]
+            ".snippet-images img::attr(src), "
+            "[class*='gallery'] img::attr(src), "
+            "img.snippet-image::attr(src)"
+        ).getall()
+        if not images:
+            images = sel.css("meta[property='og:image']::attr(content)").getall()
+        data["images"] = [urljoin(self.BASE_URL, u) for u in images if u and "thumb" not in u.lower()][:10]
 
         logger.info(f"  ✅ 解析完成: {data.get('title', 'N/A')[:40]}")
         return data

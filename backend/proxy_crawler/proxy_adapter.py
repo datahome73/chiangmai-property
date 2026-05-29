@@ -142,7 +142,7 @@ class ProxyAdapter:
         request_url = f"{self.config['base_url']}?{urlencode(params)}"
 
         try:
-            with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
                 resp = client.get(request_url, headers=headers)
                 resp.raise_for_status()
 
@@ -170,7 +170,7 @@ class ProxyAdapter:
                 time.sleep(30)
                 # One retry
                 try:
-                    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+                    with httpx.Client(timeout=120.0, follow_redirects=True) as client:
                         resp = client.get(request_url, headers=headers)
                         resp.raise_for_status()
                         content_type = resp.headers.get("content-type", "")
