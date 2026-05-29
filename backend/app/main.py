@@ -48,7 +48,7 @@ app.include_router(favorites_router, prefix="/api/v1")
 app.include_router(comparisons_router, prefix="/api/v1")
 
 
-@app.get("/")
+@app.get("/api")
 async def root():
     return {
         "message": "清迈房产比价平台 API",

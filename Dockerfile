@@ -32,4 +32,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:$PORT/health')" || exit 1
 
 # Start
-CMD cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+CMD cd backend && python startup.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
