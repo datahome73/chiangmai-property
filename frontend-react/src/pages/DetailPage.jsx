@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css'
 import usePropertyStore from '../stores/propertyStore'
 import useCompareStore from '../stores/compareStore'
 import useUserStore from '../stores/userStore'
+import { useT } from '../i18n'
 
 // Fix Leaflet default icon path issue
 delete L.Icon.Default.prototype._getIconUrl
@@ -17,13 +18,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 })
-
-const propertyTypeLabel = {
-  CONDO: '公寓',
-  HOUSE: '别墅',
-  TOWNHOUSE: '联排别墅',
-  APARTMENT: '普通公寓',
-}
 
 function formatPrice(property) {
   if (!property) return ''
@@ -35,13 +29,21 @@ function formatPrice(property) {
   return `฿${val.toLocaleString()}`
 }
 
-function formatPriceUnit(property) {
-  return property?.price_type === 'RENT' ? '/月' : ''
+function formatPriceUnit(property, t) {
+  return property?.price_type === 'RENT' ? t('perMonth') : ''
 }
 
 export default function DetailPage() {
+  const t = useT()
   const navigate = useNavigate()
   const { id } = useParams()
+
+  const propertyTypeLabel = {
+    CONDO: t('condo'),
+    HOUSE: t('house'),
+    TOWNHOUSE: t('townhouse'),
+    APARTMENT: t('apartment'),
+  }
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
@@ -127,8 +129,8 @@ export default function DetailPage() {
   const handleToggleFavorite = useCallback(() => {
     if (!userStore.isLoggedIn()) {
       Dialog.confirm({
-        content: '请先登录后再收藏房源',
-        confirmText: '去登录',
+        content: t('loginRequired'),
+        confirmText: t('login'),
         onConfirm: () => navigate('/profile'),
       })
       return
@@ -137,7 +139,7 @@ export default function DetailPage() {
       toggleFavorite(property)
       Toast.show({
         icon: isFav ? 'fail' : 'success',
-        content: isFav ? '已取消收藏' : '已收藏',
+        content: isFav ? t('unfavorited') : t('favorited'),
       })
     }
   }, [property, toggleFavorite, isFav, userStore, navigate])
@@ -149,11 +151,11 @@ export default function DetailPage() {
       Toast.show({ content: '已移出比价列表' })
     } else {
       if (compareStore.count >= 4) {
-        Toast.show({ icon: 'fail', content: '比价列表最多4套房源' })
+        Toast.show({ icon: 'fail', content: t('maxCompare') })
         return
       }
       compareStore.addItem(property)
-      Toast.show({ icon: 'success', content: '已加入比价列表' })
+      Toast.show({ icon: 'success', content: t('addedToCompare') })
     }
   }, [property, isCompared, compareStore])
 
@@ -164,16 +166,16 @@ export default function DetailPage() {
 
   const handleContactConfirm = useCallback(() => {
     setContactVisible(false)
-    Toast.show({ icon: 'success', content: '已发送咨询请求，中介将尽快联系您' })
+    Toast.show({ icon: 'success', content: t('consultSent') })
   }, [])
 
   if (detailLoading || !property) {
     return (
       <div className="detail-view">
-        <NavBar onBack={() => navigate(-1)}>房产详情</NavBar>
+        <NavBar onBack={() => navigate(-1)}>{t('propertyDetail')}</NavBar>
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
           <div className="adm-dot-loading" />
-          <div style={{ color: '#999', fontSize: 14, marginTop: 12 }}>加载中...</div>
+          <div style={{ color: '#999', fontSize: 14, marginTop: 12 }}>{t('loading')}</div>
         </div>
       </div>
     )
@@ -186,7 +188,7 @@ export default function DetailPage() {
       : ['https://via.placeholder.com/600x280?text=No+Image']
 
   const price = formatPrice(property)
-  const priceUnit = formatPriceUnit(property)
+  const priceUnit = formatPriceUnit(property, t)
   const isSale = property.price_type === 'SALE'
   const priceColor = isSale ? 'var(--color-sale)' : 'var(--color-rent)'
 
@@ -197,7 +199,7 @@ export default function DetailPage() {
   return (
     <div className="detail-view">
       {/* NavBar */}
-      <NavBar onBack={() => navigate(-1)}>房产详情</NavBar>
+      <NavBar onBack={() => navigate(-1)}>{t('propertyDetail')}</NavBar>
 
       {/* Image Swiper */}
       <Swiper className="detail-swipe" autoplay={false} indicatorProps={{ color: 'white' }}>
@@ -225,7 +227,7 @@ export default function DetailPage() {
         </div>
         <div className="tag-row">
           <Tag color={isSale ? 'success' : 'danger'}>
-            {isSale ? '出售' : '出租'}
+            {isSale ? t('sale') : t('rent')}
           </Tag>
           {property.source && (
             <Tag color="primary" fill="outline">
@@ -245,7 +247,7 @@ export default function DetailPage() {
         <h1 className="detail-title">{property.title}</h1>
         <div className="location-row">
           <LocationOutline />
-          <span>{property.address || property.district || property.location || '暂无地址信息'}</span>
+          <span>{property.address || property.district || property.location || t('unknownLocation')}</span>
         </div>
       </div>
 
@@ -254,27 +256,27 @@ export default function DetailPage() {
         <div className="section-title">基本信息</div>
         <div className="info-grid">
           <div className="info-item">
-            <div className="info-label">户型</div>
+            <div className="info-label">{t('layout')}</div>
             <div className="info-value">{property.bedrooms ? `${property.bedrooms}室` : '-'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">面积</div>
+            <div className="info-label">{t('area')}</div>
             <div className="info-value">{property.area ? `${property.area}㎡` : '-'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">楼层</div>
+            <div className="info-label">{t('floor')}</div>
             <div className="info-value">{property.floor || '-'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">装修</div>
+            <div className="info-label">{t('decoration')}</div>
             <div className="info-value">{property.decoration || '-'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">类型</div>
+            <div className="info-label">{t('propertyType')}</div>
             <div className="info-value">{propertyTypeLabel[property.property_type] || property.property_type || '-'}</div>
           </div>
           <div className="info-item">
-            <div className="info-label">来源</div>
+            <div className="info-label">{t('source')}</div>
             <div className="info-value">{property.source || '-'}</div>
           </div>
         </div>
@@ -283,7 +285,7 @@ export default function DetailPage() {
       {/* Description */}
       {property.description && (
         <div className="desc-section">
-          <div className="section-title">房源描述</div>
+          <div className="section-title">{t('description')}</div>
           <p className="desc-text">{property.description}</p>
         </div>
       )}
@@ -293,7 +295,7 @@ export default function DetailPage() {
         <div className="map-section">
           <div className="section-title">
             <LocationOutline />
-            位置信息
+            {t('location')}
           </div>
           {property.address && (
             <div className="location-text">
@@ -318,7 +320,7 @@ export default function DetailPage() {
           onClick={handleToggleFavorite}
         >
           {isFav ? <HeartFill style={{ color: 'red' }} /> : <HeartOutline />}
-          <span style={{ marginLeft: 4 }}>{isFav ? '已收藏' : '收藏'}</span>
+          <span style={{ marginLeft: 4 }}>{isFav ? t('favorited') : t('favorite')}</span>
         </Button>
         <Button
           style={{ flex: 1 }}
@@ -327,7 +329,7 @@ export default function DetailPage() {
           onClick={handleToggleCompare}
         >
           {isCompared ? <CheckOutline /> : <AddOutline />}
-          <span style={{ marginLeft: 4 }}>{isCompared ? '已加入' : '加入比价'}</span>
+          <span style={{ marginLeft: 4 }}>{isCompared ? t('inCompare') : t('addCompare')}</span>
         </Button>
         <Button
           style={{ flex: 1.5 }}
@@ -335,7 +337,7 @@ export default function DetailPage() {
           fill="solid"
           onClick={handleContact}
         >
-          联系中介
+          {t('contact')}
         </Button>
       </div>
 
@@ -350,13 +352,13 @@ export default function DetailPage() {
               对 {property.title || '该房源'} 感兴趣？
             </p>
             <p style={{ fontSize: 13, color: '#999' }}>
-              我们将为您联系对应中介，获取更多详细信息。
+              {t('contactDesc')}
             </p>
           </div>
         }
         actions={[
-          { key: 'cancel', text: '取消', onClick: () => setContactVisible(false) },
-          { key: 'confirm', text: '确认咨询', bold: true, color: 'warning', onClick: handleContactConfirm },
+          { key: 'cancel', text: t('cancel'), onClick: () => setContactVisible(false) },
+          { key: 'confirm', text: t('contactConfirm'), bold: true, color: 'warning', onClick: handleContactConfirm },
         ]}
       />
     </div>

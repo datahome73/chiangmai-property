@@ -1,6 +1,7 @@
 import React from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { TabBar } from 'antd-mobile'
+import { useTranslation } from './i18n'
 import AppRouter from './router'
 
 const HIDE_TABBAR_PATHS = ['/detail/', '/compare', '/login', '/settings']
@@ -8,14 +9,15 @@ const HIDE_TABBAR_PATHS = ['/detail/', '/compare', '/login', '/settings']
 export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const hideTabbar = HIDE_TABBAR_PATHS.some(p => location.pathname.startsWith(p))
 
   const tabs = [
-    { key: '/', title: '首页', icon: '🏠' },
-    { key: '/search', title: '搜索', icon: '🔍' },
-    { key: '/map', title: '地图', icon: '🗺️' },
-    { key: '/favorites', title: '收藏', icon: '⭐' },
-    { key: '/profile', title: '我的', icon: '👤' },
+    { key: '/', title: t('tabHome'), icon: '🏠' },
+    { key: '/search', title: t('tabSearch'), icon: '🔍' },
+    { key: '/map', title: t('tabMap'), icon: '🗺️' },
+    { key: '/favorites', title: t('tabFavorites'), icon: '⭐' },
+    { key: '/profile', title: t('tabProfile'), icon: '👤' },
   ]
 
   return (

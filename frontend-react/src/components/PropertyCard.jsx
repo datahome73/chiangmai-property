@@ -1,17 +1,18 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useT } from '../i18n'
 import usePropertyStore from '../stores/propertyStore'
 import useCompareStore from '../stores/compareStore'
 
 export default function PropertyCard({ property, showActions = true }) {
   const navigate = useNavigate()
+  const t = useT()
   const toggleFavorite = usePropertyStore((s) => s.toggleFavorite)
   const isFavorite = usePropertyStore((s) => s.isFavorite)
   const getPriceValue = usePropertyStore((s) => s.getPriceValue)
   const addItem = useCompareStore((s) => s.addItem)
   const removeItem = useCompareStore((s) => s.removeItem)
   const hasItem = useCompareStore((s) => s.hasItem)
-  const compareCount = useCompareStore((s) => s.count)
 
   const price = getPriceValue(property)
   const isRent = property.price_type === 'RENT'
@@ -25,7 +26,7 @@ export default function PropertyCard({ property, showActions = true }) {
   }
 
   const typeLabel = property.property_type
-    ? { CONDO: '公寓', HOUSE: '别墅', TOWNHOUSE: '联排', APARTMENT: '普通公寓' }[property.property_type] || property.property_type
+    ? { CONDO: t('condo'), HOUSE: t('house'), TOWNHOUSE: t('townhouse'), APARTMENT: t('apartment') }[property.property_type] || property.property_type
     : ''
 
   return (
@@ -38,18 +39,18 @@ export default function PropertyCard({ property, showActions = true }) {
       />
       <div className="property-card-body">
         <div className={`property-card-price ${!isRent ? 'sale' : ''}`}>
-          {price ? `฿${formatPrice(price)}` : '面议'}
-          <span className="property-card-price-unit">{isRent ? '/月' : '（总价）'}</span>
+          {price ? `฿${formatPrice(price)}` : t('negotiable')}
+          <span className="property-card-price-unit">{isRent ? t('perMonth') : t('totalPrice')}</span>
         </div>
-        <div className="property-card-title">{property.title || '房产标题'}</div>
+        <div className="property-card-title">{property.title || t('propertyTitle')}</div>
         <div className="property-card-meta">
-          <span>🛏 {property.bedrooms || '-'}室</span>
-          <span>🚿 {property.bathrooms || '-'}卫</span>
-          <span>📐 {property.area_sqm || '-'}m²</span>
+          <span>🛏 {property.bedrooms || '-'}{t('beds')}</span>
+          <span>🚿 {property.bathrooms || '-'}{t('baths')}</span>
+          <span>📐 {property.area_sqm || '-'}{t('sqm')}</span>
           {typeLabel && <span>{typeLabel}</span>}
         </div>
         <div className="property-card-footer">
-          <span className="property-card-source">{property.source || '未知来源'}</span>
+          <span className="property-card-source">{property.source || t('unknownSource')}</span>
           {showActions && (
             <div className="property-card-actions">
               <span

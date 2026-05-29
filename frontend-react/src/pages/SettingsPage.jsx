@@ -1,67 +1,63 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { NavBar, List, Button, ActionSheet } from 'antd-mobile';
-import { clearAuthHeader } from '../api';
-import useUserStore from '../stores/userStore';
-
-const languageLabels = {
-  zh: '中文',
-  en: 'English',
-  th: 'ภาษาไทย',
-};
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { NavBar, List, Button, ActionSheet, Toast } from 'antd-mobile'
+import { clearAuthHeader } from '../api'
+import useUserStore from '../stores/userStore'
+import { useTranslation } from '../i18n'
 
 const languageActions = [
   { key: 'zh', text: '中文' },
   { key: 'en', text: 'English' },
   { key: 'th', text: 'ภาษาไทย' },
-];
+]
 
-const SettingsPage = () => {
-  const navigate = useNavigate();
-  const { logout } = useUserStore();
+export default function SettingsPage() {
+  const navigate = useNavigate()
+  const { logout } = useUserStore()
+  const { t, lang, setLanguage } = useTranslation()
+  const [actionSheetVisible, setActionSheetVisible] = useState(false)
 
-  const [language, setLanguage] = useState('zh');
-  const [actionSheetVisible, setActionSheetVisible] = useState(false);
+  const langLabels = { zh: '中文', en: 'English', th: 'ภาษาไทย' }
 
   const handleLanguageSelect = (item) => {
-    setLanguage(item.key);
-    setActionSheetVisible(false);
-  };
+    setLanguage(item.key)
+    setActionSheetVisible(false)
+    Toast.show({ icon: 'success', content: langLabels[item.key] })
+  }
 
   const handleLogout = () => {
     ActionSheet.show({
-      actions: [{ key: 'confirm', text: '确认退出', danger: true }],
+      actions: [{ key: 'confirm', text: t('confirmLogout'), danger: true }],
       onAction: (item) => {
         if (item.key === 'confirm') {
-          clearAuthHeader();
-          logout();
-          navigate('/profile');
+          clearAuthHeader()
+          logout()
+          Toast.show(t('loggedOut'))
+          navigate('/profile')
         }
       },
-      onClose: () => {},
-    });
-  };
+    })
+  }
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      <NavBar onBack={() => navigate(-1)}>设置</NavBar>
+      <NavBar onBack={() => navigate(-1)}>{t('settingsTitle')}</NavBar>
 
       <div style={{ margin: '12px 0' }}>
         <List>
           <List.Item
-            extra={languageLabels[language] || '中文'}
+            extra={langLabels[lang] || '中文'}
             onClick={() => setActionSheetVisible(true)}
             arrow
           >
-            语言
+            {t('language')}
           </List.Item>
           <List.Item extra="v0.1.0">
-            版本号
+            {t('version')}
           </List.Item>
         </List>
       </div>
 
-      {/* Language ActionSheet */}
       <ActionSheet
         visible={actionSheetVisible}
         actions={languageActions}
@@ -70,7 +66,6 @@ const SettingsPage = () => {
         closeOnAction
       />
 
-      {/* Logout button */}
       <div style={{ padding: '24px 16px' }}>
         <Button
           block
@@ -78,11 +73,9 @@ const SettingsPage = () => {
           size="large"
           onClick={handleLogout}
         >
-          退出登录
+          {t('logout')}
         </Button>
       </div>
     </div>
-  );
-};
-
-export default SettingsPage;
+  )
+}

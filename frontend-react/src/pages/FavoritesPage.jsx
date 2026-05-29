@@ -2,9 +2,11 @@ import React, { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { NavBar, SwipeAction, Tag, Empty, Toast } from 'antd-mobile'
 import usePropertyStore from '../stores/propertyStore'
+import { useT } from '../i18n'
 
 export default function FavoritesPage() {
   const navigate = useNavigate()
+  const t = useT()
   const favorites = usePropertyStore((s) => s.favorites)
   const loadFavorites = usePropertyStore((s) => s.loadFavorites)
   const toggleFavorite = usePropertyStore((s) => s.toggleFavorite)
@@ -17,7 +19,7 @@ export default function FavoritesPage() {
   const handleDelete = async (property) => {
     try {
       await toggleFavorite(property)
-      Toast.show({ content: '已取消收藏', icon: 'success' })
+      Toast.show({ content: t('unfavorited'), icon: 'success' })
     } catch (e) {
       Toast.show({ content: '操作失败', icon: 'fail' })
     }
@@ -46,10 +48,10 @@ export default function FavoritesPage() {
   if (!favorites || favorites.length === 0) {
     return (
       <div style={{ background: '#f7f8fa', minHeight: '100vh' }}>
-        <NavBar onBack={() => navigate(-1)}>我的收藏</NavBar>
+        <NavBar onBack={() => navigate(-1)}>{t('myFavorites')}</NavBar>
         <Empty
           style={{ padding: '100px 0' }}
-          description="还没有收藏的房源"
+          description={t('noFavorites')}
         />
         <div style={{ padding: '0 40px', textAlign: 'center' }}>
           <div
@@ -68,7 +70,7 @@ export default function FavoritesPage() {
 
   return (
     <div style={{ background: '#f7f8fa', minHeight: '100vh' }}>
-      <NavBar onBack={() => navigate(-1)}>我的收藏</NavBar>
+      <NavBar onBack={() => navigate(-1)}>{t('myFavorites')}</NavBar>
       <div className="favorites-content">
         <div style={{ fontSize: 12, color: '#999', marginBottom: 8 }}>
           共 {favorites.length} 个收藏房源

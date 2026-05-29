@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Button, List } from 'antd-mobile';
 import usePropertyStore from '../stores/propertyStore';
 import useUserStore from '../stores/userStore';
+import { useT } from '../i18n';
 
 const ProfilePage = () => {
   const navigate = useNavigate();
   const { user, loading, isLoggedIn, fetchProfile } = useUserStore();
   const { favorites, loadFavorites } = usePropertyStore();
+  const t = useT();
 
   useEffect(() => {
     if (isLoggedIn()) {
@@ -58,10 +60,10 @@ const ProfilePage = () => {
             👤
           </div>
           <h3 style={{ margin: '0 0 8px', color: '#333', fontSize: 18 }}>
-            欢迎来到清迈房产比价
+            {t('welcome')}
           </h3>
           <p style={{ margin: '0 0 24px', color: '#999', fontSize: 14 }}>
-            登录后即可使用收藏、比价等更多功能
+            {t('loginPrompt')}
           </p>
           <Button
             block
@@ -69,7 +71,7 @@ const ProfilePage = () => {
             size="large"
             onClick={() => navigate('/login')}
           >
-            登录
+            {t('loginRegister')}
           </Button>
         </div>
       </div>
@@ -141,7 +143,7 @@ const ProfilePage = () => {
             {favorites?.length || 0}
           </div>
           <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-            收藏房源
+            {t('myFavoritesCount')}
           </div>
         </div>
         <div
@@ -158,7 +160,7 @@ const ProfilePage = () => {
             {user?.compareCount || 0}
           </div>
           <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>
-            我的比价
+            {t('myCompare')}
           </div>
         </div>
       </div>
@@ -170,19 +172,19 @@ const ProfilePage = () => {
             onClick={() => navigate('/favorites')}
             arrow
           >
-            我的收藏
+            {t('myFavorites')}
           </List.Item>
           <List.Item
             onClick={() => navigate('/compare')}
             arrow
           >
-            比价记录
+            {t('myCompare')}
           </List.Item>
           <List.Item
             onClick={() => navigate('/settings')}
             arrow
           >
-            设置
+            {t('settings')}
           </List.Item>
         </List>
       </div>

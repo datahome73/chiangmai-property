@@ -2,6 +2,7 @@ import React, { useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { NavBar, SearchBar, Tabs, Tag, Grid, Empty, DotLoading } from 'antd-mobile'
 import usePropertyStore from '../stores/propertyStore'
+import { useT } from '../i18n'
 
 const priceTypeLabelMap = {
   '': '全部',
@@ -43,6 +44,7 @@ function PropertyCard({ property, onClick }) {
 }
 
 export default function HomePage() {
+  const t = useT()
   const navigate = useNavigate()
   const {
     properties,
@@ -90,7 +92,7 @@ export default function HomePage() {
       <div style={{ background: '#fff', padding: '12px 16px', position: 'sticky', top: 0, zIndex: 10 }}>
         <SearchBar
           shape="round"
-          placeholder="输入城市、区域或房产名称"
+          placeholder={t('searchPlaceholder')}
           onFocus={handleSearch}
           readOnly
         />
@@ -102,16 +104,16 @@ export default function HomePage() {
         onChange={handleTabChange}
         style={{ background: '#fff' }}
       >
-        <Tabs.Tab title="全部" key="all" />
-        <Tabs.Tab title="出租" key="rent" />
-        <Tabs.Tab title="出售" key="sale" />
+        <Tabs.Tab title={t('all')} key="all" />
+        <Tabs.Tab title={t('rent')} key="rent" />
+        <Tabs.Tab title={t('sale')} key="sale" />
       </Tabs>
 
       {/* Hot Districts */}
       {districts.length > 0 && (
         <div style={{ background: '#fff', marginTop: 10, padding: '16px 16px 12px' }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#333', marginBottom: 12 }}>
-            热门区域
+            {t('hotDistricts')}
           </div>
           <Grid columns={4} gap={8}>
             {districts.slice(0, 8).map((d, idx) => (
@@ -132,7 +134,7 @@ export default function HomePage() {
                     {d.name}
                   </span>
                   <span style={{ fontSize: 11, color: '#999', marginTop: 2 }}>
-                    {d.count || d.property_count || 0} 套房源
+                    {d.count || d.property_count || 0} {t('properties')}
                   </span>
                 </div>
               </Grid.Item>
@@ -144,15 +146,15 @@ export default function HomePage() {
       {/* Property List */}
       <div style={{ padding: '12px 12px 0' }}>
         <div style={{ fontSize: 16, fontWeight: 600, color: '#333', marginBottom: 12 }}>
-          推荐房源
+          {t('recommended')}
         </div>
         {loading && properties.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <DotLoading color="primary" />
-            <div style={{ color: '#999', fontSize: 13, marginTop: 8 }}>加载中...</div>
+            <div style={{ color: '#999', fontSize: 13, marginTop: 8 }}>{t('loading')}</div>
           </div>
         ) : properties.length === 0 ? (
-          <Empty description="暂无房源信息" />
+          <Empty description={t('noData')} />
         ) : (
           <div
             style={{

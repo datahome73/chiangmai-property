@@ -4,18 +4,19 @@ import { NavBar, Button, Tag, Toast, Empty, Dialog } from 'antd-mobile'
 import useCompareStore from '../stores/compareStore'
 import usePropertyStore from '../stores/propertyStore'
 import { fetchPropertyCompare } from '../api'
+import { useT } from '../i18n'
 
 const COMPARE_FIELDS = [
-  { key: 'images', label: '图片' },
-  { key: 'price', label: '价格' },
-  { key: 'bedrooms', label: '卧室' },
-  { key: 'bathrooms', label: '卫生间' },
-  { key: 'area_sqm', label: '面积' },
-  { key: 'property_type', label: '类型' },
-  { key: 'floor', label: '楼层' },
-  { key: 'decoration', label: '装修' },
-  { key: 'district', label: '区域' },
-  { key: 'source', label: '来源' },
+  { key: 'images', labelKey: 'image' },
+  { key: 'price', labelKey: 'price' },
+  { key: 'bedrooms', labelKey: 'bedrooms' },
+  { key: 'bathrooms', labelKey: 'bathrooms' },
+  { key: 'area_sqm', labelKey: 'area_sqm' },
+  { key: 'property_type', labelKey: 'property_type' },
+  { key: 'floor', labelKey: 'floor_label' },
+  { key: 'decoration', labelKey: 'decoration_label' },
+  { key: 'district', labelKey: 'district' },
+  { key: 'source', labelKey: 'source_label' },
 ]
 
 const TYPE_LABELS = {
@@ -27,6 +28,7 @@ const TYPE_LABELS = {
 
 export default function ComparePage() {
   const navigate = useNavigate()
+  const t = useT()
   const items = useCompareStore((s) => s.items)
   const count = useCompareStore((s) => s.count)
   const removeItem = useCompareStore((s) => s.removeItem)
@@ -97,12 +99,12 @@ export default function ComparePage() {
 
   const handleAddProperty = (property) => {
     if (count >= 4) {
-      Toast.show({ content: '最多对比4个房源', icon: 'fail' })
+      Toast.show({ content: t('maxCompare'), icon: 'fail' })
       return
     }
     addItem({ ...property })
     setSelectVisible(false)
-    Toast.show({ content: '已添加到对比', icon: 'success' })
+    Toast.show({ content: t('addedToCompare'), icon: 'success' })
   }
 
   const handleRemove = (id) => {
@@ -111,7 +113,7 @@ export default function ComparePage() {
 
   const handleClearAll = () => {
     Dialog.confirm({
-      content: '确定清空所有对比项？',
+      content: t('confirmClear'),
       onConfirm: () => clearAll(),
     })
   }
@@ -122,10 +124,10 @@ export default function ComparePage() {
   if (count === 0) {
     return (
       <div className="compare-view">
-        <NavBar onBack={() => navigate(-1)}>房产对比</NavBar>
+        <NavBar onBack={() => navigate(-1)}>{t('propertyCompare')}</NavBar>
         <Empty
           style={{ padding: '80px 0' }}
-          description="还没有添加对比房源"
+          description={t('noCompareItems')}
         />
         <div style={{ padding: '0 16px' }}>
           <Button
@@ -137,7 +139,7 @@ export default function ComparePage() {
               setSelectVisible(true)
             }}
           >
-            添加房源
+            {t('addProperty')}
           </Button>
         </div>
 
@@ -149,7 +151,7 @@ export default function ComparePage() {
             <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
               {availableProperties.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-                  没有更多可添加的房源
+                  {t('noMoreAdd')}
                 </div>
               ) : (
                 availableProperties.slice(0, 20).map((p) => (
@@ -192,7 +194,7 @@ export default function ComparePage() {
                       </div>
                     </div>
                     <Button size="small" color="primary" fill="none">
-                      添加
+                      {t('addProperty')}
                     </Button>
                   </div>
                 ))
@@ -203,7 +205,7 @@ export default function ComparePage() {
             [
               {
                 key: 'cancel',
-                text: '取消',
+                text: t('cancel'),
                 onClick: () => setSelectVisible(false),
               },
             ],
@@ -215,23 +217,23 @@ export default function ComparePage() {
 
   return (
     <div className="compare-view">
-      <NavBar onBack={() => navigate(-1)}>房产对比</NavBar>
+      <NavBar onBack={() => navigate(-1)}>{t('propertyCompare')}</NavBar>
 
       {/* Header */}
       <div className="compare-header">
         <div className="header-info">
           <span>📋</span>
-          <span>已选择 {count}/4 个房源</span>
+          <span>{t('selected')} {count}{t('of')}4 {t('items')}</span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <Button size="small" color="primary" onClick={() => {
             if (properties.length === 0) loadProperties(1)
             setSelectVisible(true)
           }}>
-            添加房源
+            {t('addProperty')}
           </Button>
           <Button size="small" onClick={handleClearAll}>
-            清空
+            {t('clearAll')}
           </Button>
         </div>
       </div>
@@ -241,7 +243,7 @@ export default function ComparePage() {
         <div className="compare-table">
           {/* Header row: image + property name/tag */}
           <div className="table-row row-header">
-            <div className="cell-label">对比项</div>
+            <div className="cell-label">{t('propertyCompare')}</div>
             {items.map((item, idx) => (
               <div className="cell-value" key={item.id}>
                 <div className="cell-img-wrap">
@@ -276,7 +278,7 @@ export default function ComparePage() {
                   color={item.price_type === 'RENT' ? 'danger' : 'success'}
                   style={{ marginTop: 4 }}
                 >
-                  {item.price_type === 'RENT' ? '出租' : '出售'}
+                  {item.price_type === 'RENT' ? t('rent') : t('sale')}
                 </Tag>
               </div>
             ))}
@@ -285,7 +287,7 @@ export default function ComparePage() {
           {/* Field rows */}
           {COMPARE_FIELDS.filter((f) => f.key !== 'images').map((field) => (
             <div className="table-row" key={field.key}>
-              <div className="cell-label">{field.label}</div>
+              <div className="cell-label">{t(field.labelKey)}</div>
               {items.map((item, idx) => {
                 let cellClass = 'cell-value'
                 if (field.key === 'price') {
@@ -314,7 +316,7 @@ export default function ComparePage() {
           <div style={{ maxHeight: '50vh', overflowY: 'auto' }}>
             {availableProperties.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>
-                没有更多可添加的房源
+                {t('noMoreAdd')}
               </div>
             ) : (
               availableProperties.slice(0, 20).map((p) => (
@@ -357,7 +359,7 @@ export default function ComparePage() {
                     </div>
                   </div>
                   <Button size="small" color="primary" fill="none">
-                    添加
+                    {t('addProperty')}
                   </Button>
                 </div>
               ))
@@ -368,7 +370,7 @@ export default function ComparePage() {
           [
             {
               key: 'cancel',
-              text: '取消',
+              text: t('cancel'),
               onClick: () => setSelectVisible(false),
             },
           ],

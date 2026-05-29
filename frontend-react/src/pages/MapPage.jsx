@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import usePropertyStore from '../stores/propertyStore'
+import { useT } from '../i18n'
 
 // Fix default leaflet icon issue
 delete L.Icon.Default.prototype._getIconUrl
@@ -14,6 +15,7 @@ L.Icon.Default.mergeOptions({
 
 export default function MapPage() {
   const navigate = useNavigate()
+  const t = useT()
   const mapRef = useRef(null)
   const markerLayerRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -175,7 +177,7 @@ export default function MapPage() {
           }}
         >
           <span style={{ fontSize: 16 }}>🔍</span>
-          <span style={{ color: '#999', fontSize: 14 }}>搜索区域、房源...</span>
+          <span style={{ color: '#999', fontSize: 14 }}>{t('searchOnMap')}</span>
         </div>
       </div>
     </div>

@@ -7,32 +7,10 @@ import {
 } from 'antd-mobile'
 import usePropertyStore from '../stores/propertyStore'
 import PropertyCard from '../components/PropertyCard'
-
-const BEDROOM_OPTIONS = [
-  { label: '全部', value: '' },
-  { label: '1室', value: '1' },
-  { label: '2室', value: '2' },
-  { label: '3室', value: '3' },
-  { label: '4室', value: '4' },
-  { label: '5室+', value: '5' },
-]
-
-const SOURCE_OPTIONS = [
-  { label: '全部来源', value: '' },
-  { label: 'HipFlat', value: 'hipflat' },
-  { label: 'FazWaz', value: 'fazwaz' },
-  { label: 'DDProperty', value: 'ddproperty' },
-]
-
-const SORT_OPTIONS = [
-  { label: '默认排序', value: '' },
-  { label: '价格从低到高', value: 'price_asc' },
-  { label: '价格从高到低', value: 'price_desc' },
-  { label: '面积从大到小', value: 'area_desc' },
-  { label: '最新发布', value: 'newest' },
-]
+import { useT } from '../i18n'
 
 export default function SearchPage() {
+  const t = useT()
   const navigate = useNavigate()
   const store = usePropertyStore()
   const { properties, totalCount, loading, finished, districts, filters } = store
@@ -40,6 +18,30 @@ export default function SearchPage() {
   const [priceTab, setPriceTab] = useState('')
   const [bedrooms, setBedrooms] = useState('')
   const [filterVisible, setFilterVisible] = useState(false)
+
+  const BEDROOM_OPTIONS = [
+    { label: t('all'), value: '' },
+    { label: '1' + t('bedroom'), value: '1' },
+    { label: '2' + t('bedroom'), value: '2' },
+    { label: '3' + t('bedroom'), value: '3' },
+    { label: '4' + t('bedroom'), value: '4' },
+    { label: '5' + t('bedroom') + '+', value: '5' },
+  ]
+
+  const SOURCE_OPTIONS = [
+    { label: t('allSources'), value: '' },
+    { label: 'HipFlat', value: 'hipflat' },
+    { label: 'FazWaz', value: 'fazwaz' },
+    { label: 'DDProperty', value: 'ddproperty' },
+  ]
+
+  const SORT_OPTIONS = [
+    { label: t('defaultSort'), value: '' },
+    { label: t('priceAsc'), value: 'price_asc' },
+    { label: t('priceDesc'), value: 'price_desc' },
+    { label: t('areaDesc'), value: 'area_desc' },
+    { label: t('newest'), value: 'newest' },
+  ]
 
   // Local filter states
   const [localDistrict, setLocalDistrict] = useState('')
@@ -123,7 +125,7 @@ export default function SearchPage() {
       <SearchBar
         value={keyword}
         onChange={setKeyword}
-        placeholder="输入城市、区域或房产名称"
+        placeholder={t('searchPlaceholder')}
         onSearch={handleSearch}
         onClear={() => { setKeyword(''); store.setFilters({ keyword: '' }); loadProperties(1) }}
       />
@@ -131,9 +133,9 @@ export default function SearchPage() {
       {/* Quick Filters */}
       <div className="quick-filters">
         <Tabs activeKey={priceTab} onChange={handlePriceTabChange}>
-          <Tabs.Tab title="全部" key="" />
-          <Tabs.Tab title="出租" key="rent" />
-          <Tabs.Tab title="出售" key="sale" />
+          <Tabs.Tab title={t('all')} key="" />
+          <Tabs.Tab title={t('rent')} key="rent" />
+          <Tabs.Tab title={t('sale')} key="sale" />
         </Tabs>
         <div className="bedroom-chips">
           {BEDROOM_OPTIONS.map((item) => (
@@ -152,9 +154,9 @@ export default function SearchPage() {
 
       {/* Result Bar */}
       <div className="result-bar">
-        <span className="result-count">找到 {totalCount} 套房源</span>
+        <span className="result-count">{t('findResults')} {totalCount} {t('results')}</span>
         <Button size="small" color="primary" fill="none" onClick={handleOpenFilter}>
-          筛选
+          {t('filter')}
         </Button>
       </div>
 
@@ -163,10 +165,10 @@ export default function SearchPage() {
         {loading && properties.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
             <DotLoading color="primary" />
-            <div style={{ color: '#999', fontSize: 13, marginTop: 8 }}>加载中...</div>
+            <div style={{ color: '#999', fontSize: 13, marginTop: 8 }}>{t('loading')}</div>
           </div>
         ) : properties.length === 0 ? (
-          <Empty description="未找到匹配房源" />
+          <Empty description={t('noResults')} />
         ) : (
           <>
             <div className="property-list">
@@ -189,14 +191,14 @@ export default function SearchPage() {
           {/* District */}
           {districts.length > 0 && (
             <div className="filter-group">
-              <div className="filter-label">区域</div>
+              <div className="filter-label">{t('selectDistrict')}</div>
               <div className="filter-tags">
                 <Tag
                   color={localDistrict === '' ? 'primary' : 'default'}
                   fill={localDistrict === '' ? 'solid' : 'outline'}
                   style={{ cursor: 'pointer', padding: '4px 12px', marginBottom: 4 }}
                   onClick={() => setLocalDistrict('')}
-                >全部</Tag>
+                >{t('all')}</Tag>
                 {districts.map((d) => (
                   <Tag
                     key={d.id || d.district || d.name}
@@ -212,17 +214,17 @@ export default function SearchPage() {
 
           {/* Price Range */}
           <div className="filter-group">
-            <div className="filter-label">价格区间（万泰铢/月）</div>
+            <div className="filter-label">{t('priceRange')}</div>
             <div className="price-inputs">
-              <Input placeholder="最低价" value={localMinPrice} onChange={setLocalMinPrice} type="number" />
+              <Input placeholder={t('minPrice')} value={localMinPrice} onChange={setLocalMinPrice} type="number" />
               <span style={{ color: '#ccc' }}>—</span>
-              <Input placeholder="最高价" value={localMaxPrice} onChange={setLocalMaxPrice} type="number" />
+              <Input placeholder={t('maxPrice')} value={localMaxPrice} onChange={setLocalMaxPrice} type="number" />
             </div>
           </div>
 
           {/* Source */}
           <div className="filter-group">
-            <div className="filter-label">来源</div>
+            <div className="filter-label">{t('source')}</div>
             <div className="filter-tags">
               {SOURCE_OPTIONS.map((opt) => (
                 <Tag
@@ -238,7 +240,7 @@ export default function SearchPage() {
 
           {/* Sort */}
           <div className="filter-group">
-            <div className="filter-label">排序方式</div>
+            <div className="filter-label">{t('sortBy')}</div>
             <div className="filter-tags">
               {SORT_OPTIONS.map((opt) => (
                 <Tag
@@ -253,10 +255,10 @@ export default function SearchPage() {
           </div>
 
           <Button block color="primary" size="large" style={{ marginTop: 16 }} onClick={handleApplyFilter}>
-            应用筛选
+            {t('applyFilter')}
           </Button>
           <Button block fill="none" size="small" style={{ marginTop: 8 }} onClick={handleClearFilter}>
-            清除筛选
+            {t('clearFilter')}
           </Button>
         </div>
       </Popup>

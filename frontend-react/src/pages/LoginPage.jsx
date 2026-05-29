@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { NavBar, Button, Form, Input, Toast } from 'antd-mobile';
 import { login, register, updateAuthHeader } from '../api';
 import useUserStore from '../stores/userStore';
+import { useT } from '../i18n';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const { setToken } = useUserStore();
+  const t = useT();
 
   const [tabActive, setTabActive] = useState('login');
   const [phone, setPhone] = useState('');
@@ -17,7 +19,7 @@ const LoginPage = () => {
 
   const handleLogin = async () => {
     if (!phone || !password) {
-      Toast.show('请填写手机号和密码');
+      Toast.show(t('fillRequired'));
       return;
     }
     setLoading(true);
@@ -26,10 +28,10 @@ const LoginPage = () => {
       const token = res.data?.token || res.token;
       updateAuthHeader(token);
       setToken(token);
-      Toast.show('登录成功');
+      Toast.show(t('loginSuccess'));
       navigate('/profile');
     } catch (err) {
-      Toast.show(err?.response?.data?.message || '登录失败，请重试');
+      Toast.show(err?.response?.data?.message || t('loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -37,11 +39,11 @@ const LoginPage = () => {
 
   const handleRegister = async () => {
     if (!phone || !password || !nickname) {
-      Toast.show('请填写所有必填字段');
+      Toast.show(t('fillRequired'));
       return;
     }
     if (password !== confirmPassword) {
-      Toast.show('两次输入的密码不一致');
+      Toast.show(t('passwordMismatch'));
       return;
     }
     setLoading(true);
@@ -50,10 +52,10 @@ const LoginPage = () => {
       const token = res.data?.token || res.token;
       updateAuthHeader(token);
       setToken(token);
-      Toast.show('注册成功');
+      Toast.show(t('registerSuccess'));
       navigate('/profile');
     } catch (err) {
-      Toast.show(err?.response?.data?.message || '注册失败，请重试');
+      Toast.show(err?.response?.data?.message || t('registerFailed'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +67,7 @@ const LoginPage = () => {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      <NavBar onBack={() => navigate(-1)}>登录</NavBar>
+      <NavBar onBack={() => navigate(-1)}>{t('login')}</NavBar>
 
       {/* Tabs */}
       <div
@@ -87,7 +89,7 @@ const LoginPage = () => {
           }}
           onClick={() => switchTab('login')}
         >
-          登录
+          {t('login')}
         </div>
         <div
           style={{
@@ -101,7 +103,7 @@ const LoginPage = () => {
           }}
           onClick={() => switchTab('register')}
         >
-          注册
+          {t('register')}
         </div>
       </div>
 
@@ -109,18 +111,18 @@ const LoginPage = () => {
       {tabActive === 'login' && (
         <div style={{ padding: '24px 16px' }}>
           <Form>
-            <Form.Item label="手机号">
+            <Form.Item label={t('phoneNumber')}>
               <Input
-                placeholder="请输入手机号"
+                placeholder={t('enterPhone')}
                 value={phone}
                 onChange={(val) => setPhone(val)}
                 type="tel"
                 clearable
               />
             </Form.Item>
-            <Form.Item label="密码">
+            <Form.Item label={t('password')}>
               <Input
-                placeholder="请输入密码"
+                placeholder={t('enterPassword')}
                 value={password}
                 onChange={(val) => setPassword(val)}
                 type="password"
@@ -135,7 +137,7 @@ const LoginPage = () => {
                 loading={loading}
                 onClick={handleLogin}
               >
-                登录
+                {t('login')}
               </Button>
             </div>
           </Form>
@@ -146,35 +148,35 @@ const LoginPage = () => {
       {tabActive === 'register' && (
         <div style={{ padding: '24px 16px' }}>
           <Form>
-            <Form.Item label="手机号">
+            <Form.Item label={t('phoneNumber')}>
               <Input
-                placeholder="请输入手机号"
+                placeholder={t('enterPhone')}
                 value={phone}
                 onChange={(val) => setPhone(val)}
                 type="tel"
                 clearable
               />
             </Form.Item>
-            <Form.Item label="昵称">
+            <Form.Item label={t('nickname')}>
               <Input
-                placeholder="请输入昵称"
+                placeholder={t('enterNickname')}
                 value={nickname}
                 onChange={(val) => setNickname(val)}
                 clearable
               />
             </Form.Item>
-            <Form.Item label="密码">
+            <Form.Item label={t('password')}>
               <Input
-                placeholder="请输入密码"
+                placeholder={t('enterPassword')}
                 value={password}
                 onChange={(val) => setPassword(val)}
                 type="password"
                 clearable
               />
             </Form.Item>
-            <Form.Item label="确认密码">
+            <Form.Item label={t('confirmPassword')}>
               <Input
-                placeholder="请再次输入密码"
+                placeholder={t('reenterPassword')}
                 value={confirmPassword}
                 onChange={(val) => setConfirmPassword(val)}
                 type="password"
@@ -189,7 +191,7 @@ const LoginPage = () => {
                 loading={loading}
                 onClick={handleRegister}
               >
-                注册
+                {t('register')}
               </Button>
             </div>
           </Form>
