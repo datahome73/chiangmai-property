@@ -66,4 +66,15 @@ async def health():
 # In production, the built Vue app is served by FastAPI
 frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
 if settings.ENV == "production" and os.path.isdir(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    @app.exception_handler(404)
+    async def spa_fallback(request, exc):
+        """SPA fallback: serve index.html for any non-API route"""
+        if not request.url.path.startswith("/api/"):
+            index_path = os.path.join(frontend_dist, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
+        raise exc

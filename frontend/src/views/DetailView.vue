@@ -250,9 +250,9 @@ function destroyMap() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   const id = route.params.id
-  property.value = store.loadPropertyDetail(id)
+  property.value = await store.loadPropertyDetail(id)
   if (property.value) {
     initMap()
   }
