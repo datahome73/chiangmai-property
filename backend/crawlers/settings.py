@@ -1,100 +1,79 @@
-# Scrapy settings for crawlers project
-#
-# For simplicity, this file contains only settings considered important or
-# commonly used. You can find more settings consulting the documentation:
-#
-#     https://docs.scrapy.org/en/latest/topics/settings.html
-#     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
+import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 BOT_NAME = "crawlers"
 
 SPIDER_MODULES = ["crawlers.spiders"]
 NEWSPIDER_MODULE = "crawlers.spiders"
 
-ADDONS = {}
-
-
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-#USER_AGENT = "crawlers (+http://www.yourdomain.com)"
-
-# Obey robots.txt rules
+# ─── Crawl responsibly ────────────────────────────────────
 ROBOTSTXT_OBEY = False
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 
-# Concurrency and throttling settings
-#CONCURRENT_REQUESTS = 16
-CONCURRENT_REQUESTS_PER_DOMAIN = 2
-DOWNLOAD_DELAY = 3
+# ─── Concurrency & throttling ─────────────────────────────
+CONCURRENT_REQUESTS = 4
+CONCURRENT_REQUESTS_PER_DOMAIN = 1
+DOWNLOAD_DELAY = 5.0
+RANDOMIZE_DOWNLOAD_DELAY = True
+AUTOTHROTTLE_ENABLED = True
+AUTOTHROTTLE_START_DELAY = 5.0
+AUTOTHROTTLE_MAX_DELAY = 60.0
 
-# Disable cookies (enabled by default)
-#COOKIES_ENABLED = False
+# ─── Retry ────────────────────────────────────────────────
+RETRY_TIMES = 2
+RETRY_HTTP_CODES = [429, 500, 502, 503, 504]
+DOWNLOAD_TIMEOUT = 30
 
-# Disable Telnet Console (enabled by default)
-#TELNETCONSOLE_ENABLED = False
+# ─── Playwright (optional — for JS-rendered pages) ────────
+# Only enable if Playwright browsers are installed.
+# Install: playwright install chromium && playwright install-deps
+try:
+    from playwright.sync_api import sync_playwright
+    p = sync_playwright().start()
+    browser = p.chromium.launch(headless=True, timeout=5000)
+    browser.close()
+    p.stop()
+    DOWNLOAD_HANDLERS = {
+        "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+        "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+    }
+    TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
+    PLAYWRIGHT_LAUNCH_OPTIONS = {"headless": True, "timeout": 30000}
+    logger.info("✅ Playwright enabled (Chromium available)")
+except Exception as e:
+    logger.warning("⚠️  Playwright disabled: %s", e)
+    DOWNLOAD_HANDLERS = {}
+    PLAYWRIGHT_LAUNCH_OPTIONS = {}
 
-# Override the default request headers:
-#DEFAULT_REQUEST_HEADERS = {
-#    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-#    "Accept-Language": "en",
-#}
-
-# Enable or disable spider middlewares
-# See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
-#SPIDER_MIDDLEWARES = {
-#    "crawlers.middlewares.CrawlersSpiderMiddleware": 543,
-#}
-
-# Enable or disable downloader middlewares
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-#DOWNLOADER_MIDDLEWARES = {
-#    "crawlers.middlewares.CrawlersDownloaderMiddleware": 543,
-#}
-
-# Playwright download handler for JavaScript-rendered pages
-DOWNLOAD_HANDLERS = {
-    "http": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
-    "https": "scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler",
+# ─── Middleware ───────────────────────────────────────────
+DOWNLOADER_MIDDLEWARES = {
+    "crawlers.middlewares.RotateUserAgentMiddleware": 400,
+    "crawlers.middlewares.CloudflareBypassMiddleware": 450,
 }
-TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
-PLAYWRIGHT_LAUNCH_OPTIONS = {
-    "headless": True,
-    "timeout": 30000,
-}
 
-# Enable or disable extensions
-# See https://docs.scrapy.org/en/latest/topics/extensions.html
-#EXTENSIONS = {
-#    "scrapy.extensions.telnet.TelnetConsole": None,
-#}
-
-# Configure item pipelines
-# See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
+# ─── Pipelines ────────────────────────────────────────────
 ITEM_PIPELINES = {
     "crawlers.pipelines.DuplicateFilterPipeline": 100,
     "crawlers.pipelines.FieldNormalizerPipeline": 200,
     "crawlers.pipelines.DatabasePipeline": 300,
 }
 
-# Enable and configure the AutoThrottle extension (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/autothrottle.html
-#AUTOTHROTTLE_ENABLED = True
-# The initial download delay
-#AUTOTHROTTLE_START_DELAY = 5
-# The maximum download delay to be set in case of high latencies
-#AUTOTHROTTLE_MAX_DELAY = 60
-# The average number of requests Scrapy should be sending in parallel to
-# each remote server
-#AUTOTHROTTLE_TARGET_CONCURRENCY = 1.0
-# Enable showing throttling stats for every response received:
-#AUTOTHROTTLE_DEBUG = False
+# ─── Database ─────────────────────────────────────────────
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    f"sqlite:///{os.path.join(PROJECT_ROOT, 'cmproperty.db')}",
+)
+if DATABASE_URL and DATABASE_URL.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
-# Enable and configure HTTP caching (disabled by default)
-# See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html#httpcache-middleware-settings
-#HTTPCACHE_ENABLED = True
-#HTTPCACHE_EXPIRATION_SECS = 0
-#HTTPCACHE_DIR = "httpcache"
-#HTTPCACHE_IGNORE_HTTP_CODES = []
-#HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
-
-# Set settings whose default value is deprecated to a future-proof value
+# ─── Other ────────────────────────────────────────────────
 FEED_EXPORT_ENCODING = "utf-8"
+COOKIES_ENABLED = True
+TELNETCONSOLE_ENABLED = False
