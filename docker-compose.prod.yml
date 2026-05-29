@@ -1,0 +1,91 @@
+# 清迈房产比价平台 — 生产环境部署
+# docker compose -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cmproperty
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+      POSTGRES_DB: cmproperty
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmproperty"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      ENV: production
+      DATABASE_URL: postgresql+asyncpg://cmproperty:${DB_PASSWORD:-changeme}@db:5432/cmproperty
+      DATABASE_URL_SYNC: postgresql://cmproperty:***@db:5432/cmproperty
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./docker/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - backend
+
+  crawler:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cmproperty:***@db:5432/cmproperty
+      SCRAPY_SETTINGS_MODULE: crawlers.settings
+      PROXY_ENABLED: ${PROXY_ENABLED:-false}
+      PROXY_URL: ${PROXY_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "cd /app && while true; do
+        scrapy crawl ddproperty;
+        scrapy crawl hipflat;
+        scrapy crawl fazwaz;
+        echo 'Crawl cycle complete, sleeping 6h...';
+        sleep 21600;
+      done"
+
+volumes:
+  postgres_data:

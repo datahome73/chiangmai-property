@@ -1,0 +1,31 @@
+# FastAPI & Web
+fastapi==0.109.0
+uvicorn[standard]==0.25.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+asyncpg==0.29.0
+alembic==1.13.1
+geoalchemy2==0.14.3
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+
+# Cache & Queue
+redis[hiredis]==5.0.1
+
+# Crawling
+scrapy==2.11.0
+playwright==1.40.0
+lxml==4.9.4
+parsel==1.9.0
+
+# Utilities
+httpx==0.26.0
+python-dateutil==2.8.2
+beautifulsoup4==4.12.2
+simplejson==3.19.2
