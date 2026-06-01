@@ -72,6 +72,25 @@ def discover(spider_name: str, adapter, parser, pages: int = 1):
             ],
             "detail_url": None,
         },
+        "dotproperty": {
+            "list_urls": [
+                "https://www.dotproperty.co.th/en/condos-for-rent/chiang-mai",
+                "https://www.dotproperty.co.th/en/houses-for-rent/chiang-mai",
+                "https://www.dotproperty.co.th/en/condos-for-sale/chiang-mai",
+                "https://www.dotproperty.co.th/en/houses-for-sale/chiang-mai",
+                "https://www.dotproperty.co.th/en/apartments-for-rent/chiang-mai",
+                "https://www.dotproperty.co.th/en/townhouses-for-rent/chiang-mai",
+                "https://www.dotproperty.co.th/en/villas-for-rent/chiang-mai",
+            ],
+            "detail_url": None,
+        },
+        "propertyhub": {
+            "list_urls": [
+                "https://propertyhub.in.th/en/condo-for-rent/chiang-mai",
+                "https://propertyhub.in.th/en/condo-for-sale/chiang-mai",
+            ],
+            "detail_url": None,
+        },
     }
 
     config = site_configs.get(spider_name, {"list_urls": [], "detail_url": None})
@@ -131,6 +150,19 @@ def crawl(spider_name: str, adapter, parser, pages: int = 5, db_session=None):
         "fazwaz": [
             "https://www.fazwaz.com/property-for-rent/chiang-mai",
             "https://www.fazwaz.com/property-for-sale/chiang-mai",
+        ],
+        "dotproperty": [
+            "https://www.dotproperty.co.th/en/condos-for-rent/chiang-mai",
+            "https://www.dotproperty.co.th/en/houses-for-rent/chiang-mai",
+            "https://www.dotproperty.co.th/en/condos-for-sale/chiang-mai",
+            "https://www.dotproperty.co.th/en/houses-for-sale/chiang-mai",
+            "https://www.dotproperty.co.th/en/apartments-for-rent/chiang-mai",
+            "https://www.dotproperty.co.th/en/townhouses-for-rent/chiang-mai",
+            "https://www.dotproperty.co.th/en/villas-for-rent/chiang-mai",
+        ],
+        "propertyhub": [
+            "https://propertyhub.in.th/en/condo-for-rent/chiang-mai",
+            "https://propertyhub.in.th/en/condo-for-sale/chiang-mai",
         ],
     }
 
@@ -228,8 +260,8 @@ def _save_to_db(session, properties: list, source: str):
                     {
                         "title": prop.get("title", ""),
                         "desc": prop.get("description", ""),
-                        "price_rent": prop.get("price") if prop.get("listing_type") == "RENT" else None,
-                        "price_sale": prop.get("price") if prop.get("listing_type") == "SALE" else None,
+                        "price_rent": prop.get("price") if prop.get("listing_type", "").upper() == "RENT" else None,
+                        "price_sale": prop.get("price") if prop.get("listing_type", "").upper() == "SALE" else None,
                         "beds": prop.get("bedrooms"),
                         "baths": prop.get("bathrooms"),
                         "area": prop.get("floor_area"),
@@ -269,8 +301,8 @@ def _save_to_db(session, properties: list, source: str):
                     {
                         "title": prop.get("title", ""),
                         "desc": prop.get("description", ""),
-                        "price_rent": prop.get("price") if prop.get("listing_type") == "RENT" else None,
-                        "price_sale": prop.get("price") if prop.get("listing_type") == "SALE" else None,
+                        "price_rent": prop.get("price") if prop.get("listing_type", "").upper() == "RENT" else None,
+                        "price_sale": prop.get("price") if prop.get("listing_type", "").upper() == "SALE" else None,
                         "price_type": prop.get("listing_type", "SALE"),
                         "beds": prop.get("bedrooms"),
                         "baths": prop.get("bathrooms"),

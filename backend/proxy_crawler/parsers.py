@@ -537,10 +537,277 @@ class FazwazParser(BaseParser):
         return data
 
 
+class DotpropertyParser(BaseParser):
+    """Dot Property Thailand 解析器 (Next.js SSR + JSON-LD)"""
+
+    SOURCE = "dotproperty"
+    BASE_URL = "https://www.dotproperty.co.th"
+
+    def parse_list_urls(self, html: str, base_url: str) -> List[str]:
+        sel = Selector(text=html)
+        urls = set()
+        # Detail page links: /en/ads/...
+        for href in sel.css('a[href*="/en/ads/"]::attr(href)').getall():
+            full_url = urljoin(self.BASE_URL, href)
+            if full_url:
+                urls.add(full_url)
+        logger.info(f"  📋 找到 {len(urls)} 个房源链接")
+        return list(urls)
+
+    def parse_next_page(self, html: str, base_url: str) -> Optional[str]:
+        sel = Selector(text=html)
+        # Pagination: ?page=N links
+        current_page = 1
+        # Find current page from active pagination link
+        for a in sel.css('a[href*="page="]'):
+            href = a.attrib.get("href", "")
+            txt = a.css("::text").get("")
+            # Find the largest page number that's not the current/active one
+            page_match = re.search(r"page=(\d+)", href)
+            if page_match:
+                p = int(page_match.group(1))
+                if p > current_page:
+                    # Check if it's a "next" link - href without text content usually means next
+                    if not txt.strip():
+                        # Clean base_url of any existing page param
+                        clean_url = re.sub(r"\?page=\d+", "", base_url)
+                        return f"{clean_url}?page={p}"
+        return None
+
+    def parse_listing(self, html: str, url: str) -> Optional[Dict]:
+        """解析 Dot Property 详情页，主要从 JSON-LD 提取数据"""
+        sel = Selector(text=html)
+
+        # Find the RealEstateListing JSON-LD
+        listing_json = None
+        for script in sel.css('script[type="application/ld+json"]::text').getall():
+            try:
+                data = json.loads(script)
+                if isinstance(data, dict) and data.get("@type") == "RealEstateListing":
+                    listing_json = data
+                    break
+            except (json.JSONDecodeError, Exception):
+                continue
+
+        if not listing_json:
+            logger.warning("  ⚠️  未找到 JSON-LD 数据，页面可能无内容")
+            return None
+
+        main_entity = listing_json.get("mainEntity", {})
+        offers = main_entity.get("offers", {})
+        address = main_entity.get("address", {})
+        geo = main_entity.get("geo", {})
+        floor_size = main_entity.get("floorSize", {})
+
+        listing_type = "rent"
+        unit_text = offers.get("priceSpecification", {}).get("unitText", "")
+        if "month" in unit_text.lower():
+            listing_type = "rent"
+        else:
+            # Could be sale - check URL for hints
+            listing_type = "rent" if "/for-rent/" in url.lower() or "/rent/" in url.lower() else "sale"
+
+        data = {
+            "source": self.SOURCE,
+            "source_url": url,
+            "crawled_at": datetime.utcnow().isoformat(),
+            "source_id": url.rstrip("/").split("/")[-1].split("_")[-1] if "_" in url else url.rstrip("/").split("/")[-1],
+            "listing_type": listing_type,
+            "title": main_entity.get("name", listing_json.get("name", "")),
+            "price": self._clean_price(str(offers.get("price", "0"))),
+            "original_price_text": f"{offers.get('price', '')} THB",
+            "currency": "THB",
+            "bedrooms": main_entity.get("numberOfBedrooms"),
+            "bathrooms": main_entity.get("numberOfBathroomsTotal"),
+            "floor_area": floor_size.get("value"),
+            "description": main_entity.get("description", ""),
+            "location_name": address.get("streetAddress", ""),
+            "district": address.get("addressLocality", ""),
+            "province": address.get("addressRegion", "Chiang Mai"),
+            "latitude": geo.get("latitude"),
+            "longitude": geo.get("longitude"),
+            "images": main_entity.get("image", []),
+            "date_posted": listing_json.get("datePosted", ""),
+        }
+
+        # Property type
+        types = main_entity.get("@type", [])
+        if isinstance(types, list):
+            if "Apartment" in types:
+                data["property_type"] = "APARTMENT"
+            else:
+                data["property_type"] = "CONDO"
+        elif isinstance(types, str):
+            data["property_type"] = "CONDO"
+
+        # Amenities
+        amenities = main_entity.get("amenityFeature", [])
+        if amenities:
+            data["amenities"] = [a.get("name", "") for a in amenities if isinstance(a, dict)]
+
+        # Furnishing from description
+        all_text = (data.get("description", "") + " ").lower()
+        if "fully furnished" in all_text or "fully-furnished" in all_text:
+            data["furnishing"] = "Fully Furnished"
+        elif "unfurnished" in all_text:
+            data["furnishing"] = "Unfurnished"
+        elif "semi" in all_text:
+            data["furnishing"] = "Semi-Furnished"
+
+        # Agent from URL pattern (Dot Property uses FazWaz's CDN for images)
+        data["agent_name"] = "Dot Property"
+
+        logger.info(f"  ✅ 解析完成: {data.get('title', 'N/A')[:40]}")
+        return data
+
+
+class PropertyhubParser(BaseParser):
+    """PropertyHub Thailand 解析器 (Next.js SSR + JSON埋点)"""
+
+    SOURCE = "propertyhub"
+    BASE_URL = "https://propertyhub.in.th"
+
+    def parse_list_urls(self, html: str, base_url: str) -> List[str]:
+        sel = Selector(text=html)
+        urls = set()
+        for href in sel.css('a[href*="/en/listings/"]::attr(href)').getall():
+            full_url = urljoin(self.BASE_URL, href)
+            if full_url:
+                urls.add(full_url)
+        logger.info(f"  📋 找到 {len(urls)} 个房源链接")
+        return list(urls)
+
+    def parse_next_page(self, html: str, base_url: str) -> Optional[str]:
+        sel = Selector(text=html)
+        for a in sel.css('a[href*="/en/condo-for-rent/chiang-mai/"]'):
+            href = a.attrib.get("href", "")
+            txt = a.css("::text").get("")
+            if txt and ("next" in txt.lower() or "ถัดไป" in txt):
+                return urljoin(self.BASE_URL, href)
+        return None
+
+    def parse_listing(self, html: str, url: str) -> Optional[Dict]:
+        """解析 PropertyHub 详情页，从 JSON props 提取数据"""
+        sel = Selector(text=html)
+
+        # Find application/json script with listing data
+        listing_json = None
+        for script in sel.css('script[type="application/json"]::text').getall():
+            try:
+                data = json.loads(script)
+                listing = data.get("props", {}).get("pageProps", {}).get("listing")
+                if listing:
+                    listing_json = listing
+                    break
+            except (json.JSONDecodeError, Exception):
+                continue
+
+        if not listing_json:
+            logger.warning("  ⚠️  未找到 listing JSON 数据")
+            return None
+
+        # Extract fields
+        price_data = listing_json.get("price", {})
+        for_rent = price_data.get("forRent", {})
+        for_sale = price_data.get("forSale", {})
+
+        monthly_rent = for_rent.get("monthly", {})
+        sale_price = for_sale.get("price")
+
+        room_info = listing_json.get("roomInformation", {}) or {}
+        land_info = listing_json.get("landAndHouseInformation", {}) or {}
+        proj = listing_json.get("project", {}) or {}
+        loc = listing_json.get("location", {}) or {}
+
+        post_type = listing_json.get("postType", "FOR_RENT")
+        listing_type = "rent" if "RENT" in post_type else "sale"
+
+        # Price
+        price_val = None
+        if listing_type == "rent":
+            price_val = monthly_rent.get("price")
+        elif sale_price:
+            price_val = sale_price
+
+        # Room details
+        beds = room_info.get("numberOfBed") or land_info.get("numberOfBed")
+        baths = room_info.get("numberOfBath") or land_info.get("numberOfBath")
+        area = room_info.get("roomArea") or land_info.get("usableArea") or land_info.get("landSize")
+        floor = room_info.get("onFloor")
+
+        # Images
+        images_raw = listing_json.get("images", [])
+        images = []
+        for img in images_raw:
+            url_path = img.get("pictureUrl", "")
+            if url_path and not url_path.startswith("http"):
+                url_path = urljoin("https://propertyhub.in.th", url_path)
+            if url_path:
+                images.append(url_path)
+
+        # Property type
+        prop_type_raw = listing_json.get("propertyType", "CONDO")
+        prop_type = "CONDO"
+        if "HOUSE" in prop_type_raw or "HOME" in prop_type_raw:
+            prop_type = "HOUSE"
+        elif "TOWNHOUSE" in prop_type_raw or "TOWNHOME" in prop_type_raw:
+            prop_type = "TOWNHOUSE"
+        elif "APARTMENT" in prop_type_raw:
+            prop_type = "APARTMENT"
+        elif "LAND" in prop_type_raw:
+            prop_type = "OTHER"
+
+        # Furnishing
+        amenities = listing_json.get("amenities", {}) or {}
+        has_furniture = amenities.get("hasFurniture", False)
+        furnishing = "Fully Furnished" if has_furniture else None
+
+        # Description
+        detail_html = listing_json.get("detail", "")
+        desc = re.sub(r"<[^>]+>", "", detail_html).strip() if detail_html else ""
+
+        data = {
+            "source": self.SOURCE,
+            "source_url": url,
+            "crawled_at": datetime.utcnow().isoformat(),
+            "source_id": str(listing_json.get("id", "")),
+            "listing_type": listing_type,
+            "title": listing_json.get("title", ""),
+            "price": self._clean_price(str(price_val)) if price_val else None,
+            "original_price_text": f"{price_val:,} THB" if price_val else None,
+            "currency": "THB",
+            "bedrooms": beds,
+            "bathrooms": baths,
+            "floor_area": float(area) if area else None,
+            "floor_number": int(floor) if floor else None,
+            "description": desc[:2000] if desc else "",
+            "location_name": proj.get("address", listing_json.get("address", "")),
+            "district": "",
+            "province": "Chiang Mai",
+            "latitude": loc.get("lat") or (proj.get("location", {}) or {}).get("lat"),
+            "longitude": loc.get("lng") or (proj.get("location", {}) or {}).get("lng"),
+            "images": images[:20],
+            "property_type": prop_type,
+            "furnishing": furnishing,
+            "date_posted": listing_json.get("createdAt", ""),
+        }
+
+        # Source ID from URL as fallback
+        if not data["source_id"]:
+            slug = listing_json.get("slug", "")
+            id_match = re.search(r"id-(\d+)", url)
+            data["source_id"] = id_match.group(1) if id_match else slug.split("--")[-1] if "--" in slug else slug
+
+        logger.info(f"  ✅ 解析完成: {data.get('title', 'N/A')[:40]}")
+        return data
+
+
 # ── Parser registry ───────────────────────────────────────
 
 PARSERS = {
     "ddproperty": DdpropertyParser(),
     "hipflat": HipflatParser(),
     "fazwaz": FazwazParser(),
+    "dotproperty": DotpropertyParser(),
+    "propertyhub": PropertyhubParser(),
 }
