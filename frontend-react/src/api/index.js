@@ -33,6 +33,10 @@ export function fetchPropertyDetail(id) {
   return api.get(`/properties/${id}`)
 }
 
+export function fetchPriceHistory(id, limit = 20) {
+  return api.get(`/properties/${id}/price-history`, { params: { limit } })
+}
+
 export function fetchPropertyCompare(ids) {
   return api.get('/properties/compare', { params: { ids: ids.join(',') } })
 }

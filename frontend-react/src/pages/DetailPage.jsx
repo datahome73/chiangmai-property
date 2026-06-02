@@ -1,8 +1,53 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react'
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   NavBar, Swiper, Image, Tag, Button, Grid, Dialog, Toast,
 } from 'antd-mobile'
+
+// LazyImage: 图片懒加载 + 加载占位 + 失败回退
+function LazyImage({ src, alt, className }) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  // Try to use image CDN proxy for faster loading; fallback to original URL
+  const imgUrl = useMemo(() => {
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) return src
+    // Use a simple proxy approach — just use original URL for now
+    // If images are slow, can add a CDN prefix here later
+    return src
+  }, [src])
+
+  if (failed) {
+    return (
+      <div className={`${className || ''} lazy-img-fallback`}
+        style={{ background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ccc', fontSize: 12 }}>
+        No Image
+      </div>
+    )
+  }
+
+  return (
+    <div className={`${className || ''} lazy-img-wrapper`} style={{ position: 'relative', background: '#eee', minHeight: 200 }}>
+      {!loaded && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div className="adm-dot-loading" />
+        </div>
+      )}
+      <img
+        src={imgUrl}
+        alt={alt || ''}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => { setFailed(true); setLoaded(true) }}
+        style={{
+          width: '100%', height: 'auto', display: loaded ? 'block' : 'none',
+          objectFit: 'cover', aspectRatio: '16/9',
+        }}
+      />
+    </div>
+  )
+}
 import { HeartOutline, HeartFill, AddOutline, CheckOutline, LocationOutline } from 'antd-mobile-icons'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -48,6 +93,8 @@ export default function DetailPage() {
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
   const [contactVisible, setContactVisible] = useState(false)
+  const [priceHistory, setPriceHistory] = useState([])
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false)
 
   const {
     currentProperty,
@@ -69,6 +116,18 @@ export default function DetailPage() {
       loadPropertyDetail(id)
     }
   }, [id])
+
+  // Load price history when property loads
+  useEffect(() => {
+    if (!property?.id) return
+    setPriceHistoryLoading(true)
+    import('../api').then(({ fetchPriceHistory }) => {
+      fetchPriceHistory(property.id)
+        .then(res => setPriceHistory(res.data || []))
+        .catch(() => setPriceHistory([]))
+        .finally(() => setPriceHistoryLoading(false))
+    })
+  }, [property?.id])
 
   // Initialize map after property loads
   useEffect(() => {
@@ -205,13 +264,10 @@ export default function DetailPage() {
       <Swiper className="detail-swipe" autoplay={false} indicatorProps={{ color: 'white' }}>
         {images.map((img, idx) => (
           <Swiper.Item key={idx}>
-            <img
+            <LazyImage
               className="swipe-img"
               src={img}
               alt={`${property.title || ''} ${idx + 1}`}
-              onError={(e) => {
-                e.target.src = 'https://via.placeholder.com/600x280?text=No+Image'
-              }}
             />
           </Swiper.Item>
         ))}
@@ -287,6 +343,27 @@ export default function DetailPage() {
         <div className="desc-section">
           <div className="section-title">{t('description')}</div>
           <p className="desc-text">{property.description}</p>
+        </div>
+      )}
+
+      {/* Price History */}
+      {priceHistory.length > 0 && (
+        <div className="price-history-section">
+          <div className="section-title">
+            📊 价格走势
+          </div>
+          <div className="price-history-list">
+            {priceHistory.map((h, idx) => (
+              <div key={idx} className="price-history-item">
+                <span className="price-history-date">
+                  {new Date(h.recorded_at || h.date).toLocaleDateString()}
+                </span>
+                <span className="price-history-price">
+                  ฿{(h.price || h.price_rent || h.price_sale || 0).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

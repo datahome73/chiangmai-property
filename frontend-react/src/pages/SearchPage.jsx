@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useEffect, useState, useCallback, useMemo } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   SearchBar, Tabs, Tag, Button,
   PullToRefresh, InfiniteScroll, Empty, DotLoading,
@@ -12,11 +12,14 @@ import { useT } from '../i18n'
 export default function SearchPage() {
   const t = useT()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const store = usePropertyStore()
   const { properties, totalCount, loading, finished, districts, filters } = store
-  const [keyword, setKeyword] = useState(filters.keyword || '')
-  const [priceTab, setPriceTab] = useState('')
-  const [bedrooms, setBedrooms] = useState('')
+
+  // Read filter state from URL params (persists across navigation)
+  const [keyword, setKeyword] = useState(searchParams.get('keyword') || filters.keyword || '')
+  const [priceTab, setPriceTab] = useState(searchParams.get('priceType') || '')
+  const [bedrooms, setBedrooms] = useState(searchParams.get('bedrooms') || '')
   const [filterVisible, setFilterVisible] = useState(false)
 
   const BEDROOM_OPTIONS = [
@@ -43,12 +46,12 @@ export default function SearchPage() {
     { label: t('newest'), value: 'newest' },
   ]
 
-  // Local filter states
-  const [localDistrict, setLocalDistrict] = useState('')
-  const [localMinPrice, setLocalMinPrice] = useState('')
-  const [localMaxPrice, setLocalMaxPrice] = useState('')
-  const [localSource, setLocalSource] = useState('')
-  const [localSort, setLocalSort] = useState('')
+  // Local filter states (initialized from URL params)
+  const [localDistrict, setLocalDistrict] = useState(searchParams.get('district') || '')
+  const [localMinPrice, setLocalMinPrice] = useState(searchParams.get('minPrice') || '')
+  const [localMaxPrice, setLocalMaxPrice] = useState(searchParams.get('maxPrice') || '')
+  const [localSource, setLocalSource] = useState(searchParams.get('source') || '')
+  const [localSort, setLocalSort] = useState(searchParams.get('sort') || '')
 
   const loadProperties = useCallback((page = 1, append = false) => {
     store.loadProperties(page, append)
@@ -68,6 +71,10 @@ export default function SearchPage() {
   }, [])
 
   const handleSearch = () => {
+    const newParams = new URLSearchParams(searchParams)
+    if (keyword) newParams.set('keyword', keyword)
+    else newParams.delete('keyword')
+    setSearchParams(newParams, { replace: true })
     store.setFilters({ keyword })
     loadProperties(1)
   }
@@ -75,12 +82,20 @@ export default function SearchPage() {
   const handlePriceTabChange = (key) => {
     setPriceTab(key)
     const priceTypeMap = { '': '', rent: 'RENT', sale: 'SALE' }
+    const newParams = new URLSearchParams(searchParams)
+    if (key) newParams.set('priceType', key)
+    else newParams.delete('priceType')
+    setSearchParams(newParams, { replace: true })
     store.setFilters({ priceType: priceTypeMap[key] })
     refreshProperties()
   }
 
   const handleBedroomClick = (val) => {
     setBedrooms(val)
+    const newParams = new URLSearchParams(searchParams)
+    if (val) newParams.set('bedrooms', val)
+    else newParams.delete('bedrooms')
+    setSearchParams(newParams, { replace: true })
     store.setFilters({ bedrooms: val })
     refreshProperties()
   }
@@ -95,6 +110,13 @@ export default function SearchPage() {
   }
 
   const handleApplyFilter = () => {
+    const newParams = new URLSearchParams(searchParams)
+    const filterFields = { district: localDistrict, minPrice: localMinPrice, maxPrice: localMaxPrice, source: localSource, sort: localSort }
+    Object.entries(filterFields).forEach(([k, v]) => {
+      if (v) newParams.set(k, v)
+      else newParams.delete(k)
+    })
+    setSearchParams(newParams, { replace: true })
     store.setFilters({
       district: localDistrict,
       minPrice: localMinPrice,
@@ -112,6 +134,10 @@ export default function SearchPage() {
     setLocalMaxPrice('')
     setLocalSource('')
     setLocalSort('')
+    // Clear URL params
+    const newParams = new URLSearchParams(searchParams)
+    ;['district', 'minPrice', 'maxPrice', 'source', 'sort'].forEach(k => newParams.delete(k))
+    setSearchParams(newParams, { replace: true })
     store.setFilters({
       district: '', minPrice: '', maxPrice: '', source: '', sort: '',
     })
