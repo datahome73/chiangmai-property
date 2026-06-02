@@ -94,6 +94,7 @@ const displayList = computed(() => store.filteredProperties.slice(0, 6))
 
 onMounted(() => {
   store.loadProperties()
+  store.loadDistricts()
 })
 
 function goSearch() {

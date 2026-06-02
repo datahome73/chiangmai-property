@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { mockProperties, districts as mockDistricts } from '@/services/mockData'
 import api from '@/services/api'
 
 export const usePropertyStore = defineStore('property', () => {
@@ -9,6 +8,7 @@ export const usePropertyStore = defineStore('property', () => {
   const favorites = ref(JSON.parse(localStorage.getItem('favorites') || '[]'))
   const currentProperty = ref(null)
   const loading = ref(false)
+  const districts = ref([])
   const searchFilters = ref({
     keyword: '',
     priceType: '',       // 'rent' | 'sale' | ''
@@ -22,7 +22,6 @@ export const usePropertyStore = defineStore('property', () => {
 
   // ─── Computed ───────────────────────────────
   const favoriteIds = computed(() => new Set(favorites.value.map(f => f.id)))
-  const districts = computed(() => mockDistricts)
 
   // 筛选后的房产列表
   const filteredProperties = computed(() => {
@@ -83,16 +82,22 @@ export const usePropertyStore = defineStore('property', () => {
       })
       if (res.data?.items) {
         properties.value = res.data.items
-        loading.value = false
-        return
       }
-    } catch {
-      // Fallback to mock
+    } catch (e) {
+      console.error('Failed to load properties:', e)
     }
-    setTimeout(() => {
-      properties.value = mockProperties
-      loading.value = false
-    }, 200)
+    loading.value = false
+  }
+
+  async function loadDistricts() {
+    try {
+      const res = await api.get('/districts')
+      if (res.data && Array.isArray(res.data)) {
+        districts.value = res.data
+      }
+    } catch (e) {
+      console.error('Failed to load districts:', e)
+    }
   }
 
   async function loadPropertyDetail(id) {
@@ -102,12 +107,11 @@ export const usePropertyStore = defineStore('property', () => {
         currentProperty.value = res.data
         return res.data
       }
-    } catch {
-      // Fallback to mock
+    } catch (e) {
+      console.error('Failed to load property detail:', e)
     }
-    const found = mockProperties.find(p => p.id === Number(id))
-    currentProperty.value = found || null
-    return found
+    currentProperty.value = null
+    return null
   }
 
   async function toggleFavorite(property) {
@@ -176,6 +180,6 @@ export const usePropertyStore = defineStore('property', () => {
     favoriteIds, districts, filteredProperties,
     loadProperties, loadPropertyDetail, updateFilters, resetFilters,
     toggleFavorite, isFavorite, getPriceLabel, getPriceValue,
-    loadFavorites,
+    loadFavorites, loadDistricts,
   }
 })
