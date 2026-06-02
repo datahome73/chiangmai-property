@@ -98,16 +98,19 @@ class ProxyAdapter:
         self._last_request = 0.0
         self.session = None
 
-    def fetch(self, url: str, wait_for_selector: Optional[str] = None) -> str:
+    def fetch(self, url: str, wait_for_selector: Optional[str] = None,
+              max_retries: int = 3, fallback_services: Optional[list] = None) -> str:
         """
         通过代理 API 获取 URL 的 HTML 内容。
 
         Args:
             url: 目标 URL
             wait_for_selector: ScrapingAnt 专用 - 等待 CSS 选择器出现后再返回
+            max_retries: 每次调用最大重试次数（含退避）
+            fallback_services: 当前服务失败后依次尝试的备用服务列表
 
         Returns:
-            HTML 字符串，失败返回空字符串
+            HTML 字符串，持续失败返回空字符串
         """
         if not self.api_key:
             logger.error("❌ API Key 未设置，无法请求 %s", url)
@@ -137,56 +140,113 @@ class ProxyAdapter:
         if wait_for_selector and self.service == "scrapingant":
             params["wait_for_selector"] = wait_for_selector
 
-        # Make request
         import httpx
         request_url = f"{self.config['base_url']}?{urlencode(params)}"
 
-        try:
-            with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-                resp = client.get(request_url, headers=headers)
-                resp.raise_for_status()
+        last_error = ""
+        for attempt in range(1, max_retries + 1):
+            try:
+                with httpx.Client(timeout=120.0, follow_redirects=True) as client:
+                    resp = client.get(request_url, headers=headers)
+                    resp.raise_for_status()
 
-                content_type = resp.headers.get("content-type", "")
-                response_field = self.config.get("response_field")
+                    content_type = resp.headers.get("content-type", "")
+                    response_field = self.config.get("response_field")
 
-                if response_field and "application/json" in content_type:
-                    data = resp.json()
-                    html = data.get(response_field, "") or resp.text
+                    if response_field and "application/json" in content_type:
+                        data = resp.json()
+                        html = data.get(response_field, "") or resp.text
+                    else:
+                        html = resp.text
+
+                    if not html:
+                        logger.warning("⚠️  空响应 (第%d次): %s", attempt, url)
+                        if attempt < max_retries:
+                            wait = 10 ** attempt
+                            logger.warning("   等待 %ds 后重试...", wait)
+                            time.sleep(wait)
+                            continue
+                        return ""
+
+                    logger.info("✅ 成功获取 %s (%d bytes)", url.split("//")[1][:50], len(html))
+                    return html
+
+            except httpx.HTTPStatusError as e:
+                status = e.response.status_code
+                logger.error("❌ HTTP %s (第%d次): %s", status, attempt, url)
+
+                if status == 429 or status == 409:
+                    # Rate limited — exponential backoff
+                    if attempt < max_retries:
+                        wait = min(15 * attempt, 60)
+                        logger.warning("   速率限制，等待 %ds 后重试...", wait)
+                        time.sleep(wait)
+                        continue
+                    last_error = f"HTTP {status} after {max_retries} retries"
+
+                elif status == 402:
+                    msg = f"   {self.service} 免费额度已用完！升级套餐或等待下个月重置。"
+                    logger.error(msg)
+                    last_error = msg
+                    break  # No point retrying
+
+                elif status in (500, 502, 503, 504):
+                    # Server error — retry with backoff
+                    if attempt < max_retries:
+                        wait = 10 * attempt
+                        logger.warning("   服务端错误，等待 %ds 后重试...", wait)
+                        time.sleep(wait)
+                        continue
+                    last_error = f"HTTP {status} after {max_retries} retries"
+
                 else:
-                    html = resp.text
+                    # Other 4xx — no retry
+                    last_error = f"HTTP {status}"
+                    break
 
-                if not html:
-                    logger.warning("⚠️  空响应: %s", url)
-                    return ""
+            except httpx.TimeoutException:
+                logger.error("⏱️ 超时 (第%d次): %s", attempt, url)
+                if attempt < max_retries:
+                    wait = 5 * attempt
+                    logger.warning("   等待 %ds 后重试...", wait)
+                    time.sleep(wait)
+                    continue
+                last_error = f"Timeout after {max_retries} retries"
 
-                logger.info("✅ 成功获取 %s (%d bytes)", url.split("//")[1][:50], len(html))
-                return html
+            except Exception as e:
+                logger.error("❌ 请求失败 (第%d次) %s: %s", attempt, url, e)
+                if attempt < max_retries:
+                    wait = 5 * attempt
+                    time.sleep(wait)
+                    continue
+                last_error = str(e)[:120]
 
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            logger.error("❌ HTTP %s: %s", status, url)
-            if status == 409:
-                logger.warning("   409 Conflict — 速率限制，等待 30 秒后重试...")
-                time.sleep(30)
-                # One retry
+        # ── Fallback to alternative services ──────────────────────
+        if last_error and fallback_services:
+            for fb_service in fallback_services:
+                if fb_service == self.service:
+                    continue
+                fb_api_key = os.environ.get({
+                    "scrapingant": "SCRAPINGANT_API_KEY",
+                    "scrapingbee": "SCRAPINGBEE_API_KEY",
+                    "scrapingfish": "SCRAPINGFISH_API_KEY",
+                    "zenrows": "ZENROWS_API_KEY",
+                    "crawlbase": "CRAWLBASE_API_KEY",
+                }.get(fb_service, ""), "")
+                if not fb_api_key:
+                    continue
                 try:
-                    with httpx.Client(timeout=120.0, follow_redirects=True) as client:
-                        resp = client.get(request_url, headers=headers)
-                        resp.raise_for_status()
-                        content_type = resp.headers.get("content-type", "")
-                        response_field = self.config.get("response_field")
-                        if response_field and "application/json" in content_type:
-                            return resp.json().get(response_field, "") or resp.text
-                        return resp.text
-                except Exception as e2:
-                    logger.error("❌ 重试仍失败: %s", e2)
-            if self.service == "scrapingant" and status == 402:
-                logger.error("   ScrapingAnt 免费额度已用完！升级套餐或等待下个月重置。")
-            return ""
+                    fb_adapter = ProxyAdapter(service=fb_service, api_key=fb_api_key)
+                    logger.info("🔄 降级至 %s 抓取: %s", fb_service, url)
+                    html = fb_adapter.fetch(url, wait_for_selector=wait_for_selector,
+                                            max_retries=1, fallback_services=None)
+                    if html:
+                        return html
+                except Exception:
+                    continue
 
-        except Exception as e:
-            logger.error("❌ 请求失败 %s: %s", url, e)
-            return ""
+        logger.error("❌ 所有重试/降级均失败: %s — %s", url, last_error)
+        return ""
 
 
 def register_proxy_service(name: str, config: dict):

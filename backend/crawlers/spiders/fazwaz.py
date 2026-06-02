@@ -25,6 +25,8 @@ class FazwazSpider(scrapy.Spider):
         "CONCURRENT_REQUESTS_PER_DOMAIN": 1,
         "DOWNLOAD_DELAY": 4.0,
         "PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT": 60000,
+        "RETRY_TIMES": 3,
+        "RETRY_HTTP_CODES": [429, 500, 502, 503, 504, 403],
     }
 
     def __init__(self, rent=True, sale=False, max_pages=50, *args, **kwargs):
@@ -47,6 +49,11 @@ class FazwazSpider(scrapy.Spider):
     async def parse(self, response):
         """Parse search/listings grid page."""
         self.logger.info("📄 FazWaz page: %s", response.url)
+
+        # ── Max pages safety ────────────────────────────────
+        if self.max_pages <= 0:
+            self.logger.info("⏹️  Max pages reached, stopping pagination")
+            return
 
         # ── Extract listing URLs ───────────────────────────
         # FazWaz uses <a> tags with specific href patterns

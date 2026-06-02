@@ -1,5 +1,6 @@
 import logging
 import random
+import time
 from fake_useragent import UserAgent
 
 logger = logging.getLogger(__name__)
@@ -37,29 +38,82 @@ class RotateUserAgentMiddleware:
 
 
 class CloudflareBypassMiddleware:
-    """Detect Cloudflare challenge pages and log a warning.
+    """Detect Cloudflare challenge pages and automatically retry with Playwright.
 
-    For sites behind Cloudflare, the spider should use Playwright
-    (meta={'playwright': True}) to render JS challenges.
+    If Cloudflare is detected AND the spider has use_playwright=True, the
+    middleware will automatically re-issue the request with Playwright enabled.
+    Also adds automatic retry for transient Cloudflare 503s.
     """
 
+    CF_CHALLENGE_KEYWORDS = [
+        "just a moment",
+        "cloudflare",
+        "checking your browser",
+        "cf-browser-verification",
+        "challenge-platform",
+        "__cf_chl_",
+        "cdn-cgi/challenge-platform",
+    ]
+
+    MAX_CF_RETRIES = 3
+    CF_RETRY_DELAY = 10  # seconds
+
     def process_response(self, request, response, spider):
-        if response.status in (403, 503):
-            body_text = response.text[:500].lower()
-            if "just a moment" in body_text or "cloudflare" in body_text:
-                spider.logger.warning(
-                    "☁️ Cloudflare detected on %s — "
-                    "re-run with Playwright: meta={'playwright': True}",
-                    response.url,
+        if response.status not in (403, 503, 429):
+            return response
+
+        body_text = response.text[:1000].lower()
+        is_cf = any(kw in body_text for kw in self.CF_CHALLENGE_KEYWORDS)
+
+        if not is_cf and response.status not in (429, 503):
+            return response
+
+        # ── Cloudflare challenge detected ──────────────────────
+        if is_cf:
+            spider.logger.warning(
+                "☁️ Cloudflare detected on %s", response.url,
+            )
+
+            # Count previous CF retries for this URL to avoid infinite loop
+            cf_retries = request.meta.get("_cf_retries", 0)
+            if cf_retries >= self.MAX_CF_RETRIES:
+                spider.logger.error(
+                    "❌ Cloudflare max retries exceeded for %s", response.url
                 )
-                # If spider has a playwright fallback, re-request with it
-                if (
-                    getattr(spider, "use_playwright", False)
-                    and not request.meta.get("playwright")
-                ):
-                    spider.logger.info("🔄 Retrying with Playwright: %s", response.url)
-                    new_request = request.copy()
-                    new_request.meta["playwright"] = True
-                    new_request.meta["playwright_include_page"] = True
-                    return new_request
+                return response
+
+            # Strategy 1: If spider has Playwright fallback, use it
+            if getattr(spider, "use_playwright", False) and not request.meta.get("playwright"):
+                spider.logger.info("🔄 Retrying with Playwright: %s", response.url)
+                new_request = request.copy()
+                new_request.meta["playwright"] = True
+                new_request.meta["playwright_include_page"] = True
+                new_request.meta["_cf_retries"] = cf_retries + 1
+                return new_request
+
+            # Strategy 2: Wait and retry (some CF challenges are transient)
+            spider.logger.info("⏳ Waiting %ds before Cloudflare retry: %s",
+                               self.CF_RETRY_DELAY, response.url)
+            time.sleep(self.CF_RETRY_DELAY)
+            new_request = request.copy()
+            new_request.meta["_cf_retries"] = cf_retries + 1
+            new_request.dont_filter = True
+            return new_request
+
+        # ── Rate limiting (429) / server error (503) ───────────
+        if response.status == 429 or (response.status == 503 and not is_cf):
+            retries_left = request.meta.get("_retry_times", 0)
+            spider.logger.warning(
+                "⏳ HTTP %s on %s (retries used: %s)",
+                response.status, response.url, retries_left,
+            )
+            if retries_left < 3:
+                wait = 10 * (retries_left + 1)
+                spider.logger.info("   Waiting %ds and retrying...", wait)
+                time.sleep(wait)
+                new_request = request.copy()
+                new_request.meta["_retry_times"] = retries_left + 1
+                new_request.dont_filter = True
+                return new_request
+
         return response
