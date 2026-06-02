@@ -9,6 +9,7 @@ from app.schemas.property import (
     PropertyFilterParams,
     MarkerResponse,
     DistrictResponse,
+    PriceHistoryResponse,
 )
 from app.services.property_service import (
     get_properties,
@@ -16,6 +17,7 @@ from app.services.property_service import (
     get_properties_for_compare,
     get_markers,
     get_districts,
+    get_price_history,
 )
 
 router = APIRouter(prefix="/properties", tags=["房产"])
@@ -83,3 +85,14 @@ async def get_property(
     if not result:
         raise HTTPException(status_code=404, detail="房产未找到")
     return PropertyResponse.model_validate(result)
+
+
+@router.get("/{property_id}/price-history", response_model=List[PriceHistoryResponse])
+async def property_price_history(
+    property_id: int,
+    limit: int = Query(10, ge=1, le=100, description="返回条数"),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取房产价格变动历史"""
+    records = await get_price_history(db, property_id, limit)
+    return [PriceHistoryResponse.model_validate(r) for r in records]

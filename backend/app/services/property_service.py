@@ -136,6 +136,18 @@ async def get_properties_for_compare(
     return items
 
 
+async def get_price_history(db: AsyncSession, property_id: int, limit: int = 10) -> List:
+    from app.models.property import PriceHistory
+    stmt = (
+        select(PriceHistory)
+        .where(PriceHistory.property_id == property_id)
+        .order_by(PriceHistory.recorded_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
 async def get_markers(
     db: AsyncSession,
     lat_min: Optional[float] = None,

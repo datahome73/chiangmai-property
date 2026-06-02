@@ -83,14 +83,27 @@ class MarkerResponse(BaseModel):
 
 class DistrictResponse(BaseModel):
     name: str
-    name_en: Optional[str] = None
+    name_en: Optional[str] = Field(None, alias="name_en")
     count: int
     avg_price_rent: Optional[float] = None
     avg_price_sale: Optional[float] = None
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
+
+class PriceHistoryResponse(BaseModel):
+    id: int
+    property_id: int
+    price_rent: Optional[float] = None
+    price_sale: Optional[float] = None
+    currency: str = "THB"
+    price_type: Optional[str] = None
+    recorded_at: datetime
+
+    class Config:
+        from_attributes = True
 
 class CompareRequest(BaseModel):
     ids: List[int] = Field(..., min_length=1, max_length=20)

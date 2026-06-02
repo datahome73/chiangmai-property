@@ -192,10 +192,17 @@ class DatabasePipeline:
                 ).fetchone()
 
                 if existing:
-                    # Update existing
+                    # Update existing — fetch old prices first for history tracking
                     prop_id = existing[0]
+                    old_row = session.execute(
+                        text("SELECT price_rent, price_sale, updated_at FROM properties WHERE id = :id"),
+                        {"id": prop_id},
+                    ).fetchone()
+                    old_price_rent = old_row[0] if old_row else None
+                    old_price_sale = old_row[1] if old_row else None
+
                     session.execute(
-                        text("""
+                        text("""\
                             UPDATE properties SET
                                 title = :title, description = :desc,
                                 price_rent = :price_rent, price_sale = :price_sale,
@@ -231,6 +238,28 @@ class DatabasePipeline:
                         },
                     )
                     logger.info("🔄 Updated property %s/%s (id=%s)", source, source_id, prop_id)
+
+                    # Price change tracking
+                    new_price_rent = adapter.get("price") if adapter.get("listing_type") == "rent" else None
+                    new_price_sale = adapter.get("price") if adapter.get("listing_type") == "sale" else None
+                    if (new_price_rent is not None and new_price_rent != old_price_rent) or \
+                       (new_price_sale is not None and new_price_sale != old_price_sale):
+                        session.execute(
+                            text("""\
+                                INSERT INTO price_history
+                                    (property_id, price_rent, price_sale, currency, price_type, recorded_at)
+                                VALUES (:pid, :pr, :ps, :cur, :pt, :now)
+                            """),
+                            {
+                                "pid": prop_id,
+                                "pr": new_price_rent,
+                                "ps": new_price_sale,
+                                "cur": adapter.get("currency", "THB"),
+                                "pt": adapter.get("listing_type", "sale"),
+                                "now": datetime.utcnow(),
+                            },
+                        )
+                        logger.info("📈 Price changed for %s/%s — recorded history", source, source_id)
                 else:
                     # Insert new
                     session.execute(
@@ -304,5 +333,5 @@ class DatabasePipeline:
         return item
 
     def _record_price_history(self, session, prop_id, adapter):
-        """Record to price_history if price seems to have changed."""
-        pass  # TODO: compare old price, insert if different
+        """Record to price_history — now handled inline in process_item."""
+        pass  # Kept for backward compatibility, logic moved to process_item
