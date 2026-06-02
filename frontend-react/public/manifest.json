@@ -1,0 +1,32 @@
+{
+  "name": "清迈房产比价",
+  "short_name": "CM比价",
+  "description": "清迈全城房屋出租出售比价平台 — 聚合多家泰国房产网站房源",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fa",
+  "theme_color": "#ee0a24",
+  "orientation": "portrait-primary",
+  "categories": ["lifestyle", "real estate"],
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
+}
