@@ -3,7 +3,7 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 COPY frontend-react/package.json frontend-react/package-lock.json* ./
-RUN npm ci
+RUN npm install
 COPY frontend-react/ ./
 RUN npm run build
 
