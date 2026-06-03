@@ -17,13 +17,18 @@ import app.models.property  # noqa: F401  # registers Property, PriceHistory, Us
 
 
 async def init_db():
-    """创建表结构"""
+    """创建表结构，数据库为空时自动注入种子数据"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         result = await conn.execute(text("SELECT COUNT(*) FROM properties"))
         count = result.scalar()
 
-    print(f"✅ 数据库就绪 ({count} 条房源数据)")
+    if count == 0:
+        print("🔄 数据库为空，注入种子数据...")
+        from seed_data import seed  # type: ignore
+        await seed()
+    else:
+        print(f"✅ 数据库就绪 ({count} 条房源数据)")
 
 
 if __name__ == "__main__":
