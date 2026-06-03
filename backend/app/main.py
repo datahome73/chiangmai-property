@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
+import logging
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -65,19 +66,50 @@ async def health():
 # ─── Serve Frontend Static Files (Production) ─────────────
 # In production, the built frontend is served by FastAPI
 frontend_dist = os.path.join(os.path.dirname(__file__), "../../frontend-react/dist")
-if settings.ENV == "production" and os.path.isdir(frontend_dist):
+logger = logging.getLogger(__name__)
+logger.info("frontend_dist path: %s exists=%s", os.path.abspath(frontend_dist), os.path.isdir(frontend_dist))
+if settings.ENV == "production":
     from fastapi.responses import FileResponse
+    from fastapi import HTTPException
 
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+    # Try multiple paths for Docker build compatibility
+    dist_candidates = [
+        frontend_dist,
+        os.path.join(os.path.dirname(__file__), "../frontend-react/dist"),
+        os.path.join(os.path.dirname(__file__), "../../../frontend-react/dist"),
+        "/app/frontend-react/dist",
+    ]
+    resolved_dist = None
+    for p in dist_candidates:
+        ap = os.path.abspath(p)
+        logger.info("trying dist path: %s exists=%s", ap, os.path.isdir(ap))
+        if os.path.isdir(ap):
+            resolved_dist = ap
+            break
 
-    # Catch-all route for SPA — must be last
-    @app.get("/{full_path:path}")
-    async def spa_fallback(full_path: str):
-        if full_path.startswith("api/") or full_path.startswith("assets/") or full_path == "health":
-            from fastapi import HTTPException
+    if resolved_dist and os.path.isdir(resolved_dist):
+        assets_dir = os.path.join(resolved_dist, "assets")
+        if os.path.isdir(assets_dir):
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+            logger.info("mounted /assets from %s", assets_dir)
+
+        @app.get("/{full_path:path}")
+        async def spa_fallback(full_path: str):
+            if full_path.startswith("api/") or full_path.startswith("assets/") or full_path == "health":
+                raise HTTPException(status_code=404)
+            index_path = os.path.join(resolved_dist, "index.html")
+            if os.path.isfile(index_path):
+                return FileResponse(index_path)
             raise HTTPException(status_code=404)
-        index_path = os.path.join(frontend_dist, "index.html")
-        if os.path.isfile(index_path):
-            return FileResponse(index_path)
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404)
+    else:
+        logger.warning("frontend dist not found, SPA serving disabled")
+        # Health check endpoint
+        @app.get("/debug-paths")
+        async def debug_paths():
+            import os as _os
+            return {
+                "cwd": _os.getcwd(),
+                "dir__file__": _os.path.dirname(__file__),
+                "candidates": {p: _os.path.isdir(_os.path.abspath(p)) for p in dist_candidates},
+                "ls_backend": _os.listdir(_os.path.join(_os.path.dirname(__file__), "../..")),
+            }
