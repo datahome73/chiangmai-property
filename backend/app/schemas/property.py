@@ -100,7 +100,7 @@ class PriceHistoryResponse(BaseModel):
     price_sale: Optional[float] = None
     currency: str = "THB"
     price_type: Optional[str] = None
-    recorded_at: datetime
+    scraped_at: datetime
 
     class Config:
         from_attributes = True
