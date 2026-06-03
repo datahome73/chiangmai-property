@@ -76,4 +76,17 @@ export function register(data) {
   return api.post('/auth/register', data)
 }
 
+// AI Analysis
+export function fetchAIAnalysis(propertyId) {
+  return api.get(`/properties/${propertyId}/ai-analysis`)
+}
+
+export function fetchAICompare(ids) {
+  return api.get('/properties/ai/compare', { params: { ids: ids.join(',') } })
+}
+
+export function fetchSmartSearch(query, page = 1, pageSize = 20) {
+  return api.get('/properties/ai/smart-search', { params: { q: query, page, page_size: pageSize } })
+}
+
 export default api

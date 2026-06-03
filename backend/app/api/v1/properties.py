@@ -10,6 +10,9 @@ from app.schemas.property import (
     MarkerResponse,
     DistrictResponse,
     PriceHistoryResponse,
+    AIAnalysisResponse,
+    CompareAnalysisResponse,
+    SmartSearchResponse,
 )
 from app.services.property_service import (
     get_properties,
@@ -18,6 +21,11 @@ from app.services.property_service import (
     get_markers,
     get_districts,
     get_price_history,
+)
+from app.services.ai_analysis_service import (
+    analyze_property,
+    compare_analysis,
+    smart_search,
 )
 
 router = APIRouter(prefix="/properties", tags=["房产"])
@@ -96,3 +104,49 @@ async def property_price_history(
     """获取房产价格变动历史"""
     records = await get_price_history(db, property_id, limit)
     return [PriceHistoryResponse.model_validate(r) for r in records]
+
+
+# ============================================================
+# AI 分析接口
+# ============================================================
+
+@router.get("/{property_id}/ai-analysis", response_model=AIAnalysisResponse)
+async def property_ai_analysis(
+    property_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """AI 房源分析 — 价格评估、评分、趋势、一句话总结"""
+    result = await analyze_property(db, property_id)
+    if "error" in result:
+        raise HTTPException(status_code=404, detail=result["error"])
+    return AIAnalysisResponse(**result)
+
+
+@router.get("/ai/compare", response_model=CompareAnalysisResponse)
+async def ai_compare_properties(
+    ids: str = Query(..., description="逗号分隔的房产ID列表"),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI 比价智能推荐 — 多维度打分排序"""
+    try:
+        property_ids = [int(x.strip()) for x in ids.split(",") if x.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的ID格式")
+
+    if not property_ids:
+        raise HTTPException(status_code=400, detail="请至少提供一个房产ID")
+
+    result = await compare_analysis(db, property_ids)
+    return CompareAnalysisResponse(**result)
+
+
+@router.get("/ai/smart-search", response_model=SmartSearchResponse)
+async def ai_smart_search(
+    q: str = Query(..., description="自然语言搜索，如：'清迈大学附近两室月租1万以下'"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    db: AsyncSession = Depends(get_db),
+):
+    """AI 智能搜索 — 自然语言→结构化查询"""
+    result = await smart_search(db, q, page=page, page_size=page_size)
+    return SmartSearchResponse(**result)

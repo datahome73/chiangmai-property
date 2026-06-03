@@ -55,6 +55,7 @@ import usePropertyStore from '../stores/propertyStore'
 import useCompareStore from '../stores/compareStore'
 import useUserStore from '../stores/userStore'
 import { useT } from '../i18n'
+import { fetchAIAnalysis } from '../api'
 
 // Fix Leaflet default icon path issue
 delete L.Icon.Default.prototype._getIconUrl
@@ -95,6 +96,9 @@ export default function DetailPage() {
   const [contactVisible, setContactVisible] = useState(false)
   const [priceHistory, setPriceHistory] = useState([])
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false)
+  const [aiAnalysis, setAIAnalysis] = useState(null)
+  const [aiLoading, setAILoading] = useState(false)
+  const [aiVisible, setAIVisible] = useState(false)
 
   const {
     currentProperty,
@@ -227,6 +231,92 @@ export default function DetailPage() {
     setContactVisible(false)
     Toast.show({ icon: 'success', content: t('consultSent') })
   }, [])
+
+  const handleAIAnalysis = useCallback(async () => {
+    if (!property?.id) return
+    setAILoading(true)
+    setAIVisible(true)
+    try {
+      const res = await fetchAIAnalysis(property.id)
+      setAIAnalysis(res.data)
+    } catch (e) {
+      setAIAnalysis({ error: '分析失败，请稍后重试' })
+      Toast.show({ icon: 'fail', content: 'AI 分析失败' })
+    } finally {
+      setAILoading(false)
+    }
+  }, [property?.id])
+
+  function renderAIAnalysisContent() {
+    if (aiLoading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+          <div className="adm-dot-loading" />
+          <div style={{ color: '#999', fontSize: 14, marginTop: 12 }}>AI 分析中...</div>
+        </div>
+      )
+    }
+    if (!aiAnalysis || aiAnalysis.error) {
+      return <div style={{ padding: 20, color: '#999' }}>{aiAnalysis?.error || '暂无分析数据'}</div>
+    }
+    const pa = aiAnalysis.price_assessment || {}
+    const vs = aiAnalysis.value_score || {}
+    const tr = aiAnalysis.trend || {}
+    const score = vs.score
+
+    return (
+      <div className="ai-analysis-content" style={{ padding: '0 4px' }}>
+        {/* 一句话总结 */}
+        {aiAnalysis.summary && (
+          <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, lineHeight: 1.6 }}>
+            {aiAnalysis.summary}
+          </div>
+        )}
+
+        {/* 评分 */}
+        {score != null && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f5f5f5', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>综合评分</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 24, fontWeight: 700, color: score >= 80 ? '#52c41a' : score >= 60 ? '#faad14' : '#ff4d4f' }}>{score}</span>
+              <span style={{ fontSize: 13, color: '#666' }}>{vs.label}</span>
+            </div>
+          </div>
+        )}
+
+        {/* 价格评估 */}
+        {pa.level && (
+          <div style={{ background: '#f0f5ff', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>💰 价格评估</div>
+            <div style={{ fontSize: 13, color: '#666' }}>{pa.label}</div>
+            {pa.avg_price && (
+              <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>同区均价：฿{(pa.avg_price / 10000).toFixed(1)}万</div>
+            )}
+          </div>
+        )}
+
+        {/* 价格趋势 */}
+        {tr.has_trend && (
+          <div style={{ background: tr.direction === 'down' ? '#fff1f0' : tr.direction === 'up' ? '#f6ffed' : '#f5f5f5', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>📊 价格趋势</div>
+            <div style={{ fontSize: 13, color: '#666' }}>{tr.label}</div>
+            <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{tr.records_count} 次记录</div>
+          </div>
+        )}
+
+        {/* 位置 */}
+        <div style={{ background: '#f5f5f5', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>📍 位置</div>
+          <div style={{ fontSize: 13, color: '#666' }}>{aiAnalysis.district || '未知区域'}</div>
+        </div>
+
+        {/* 分析时间 */}
+        <div style={{ fontSize: 11, color: '#ccc', textAlign: 'right', marginTop: 8 }}>
+          AI 分析报告 · {new Date(aiAnalysis.analysis_time).toLocaleString('zh-CN')}
+        </div>
+      </div>
+    )
+  }
 
   if (detailLoading || !property) {
     return (
@@ -392,8 +482,8 @@ export default function DetailPage() {
       <div className="bottom-bar">
         <Button
           style={{ flex: 1 }}
-          fill={isFav ? 'solid' : 'none'}
-          color="default"
+          fill="none"
+          color="primary"
           onClick={handleToggleFavorite}
         >
           {isFav ? <HeartFill style={{ color: 'red' }} /> : <HeartOutline />}
@@ -407,6 +497,14 @@ export default function DetailPage() {
         >
           {isCompared ? <CheckOutline /> : <AddOutline />}
           <span style={{ marginLeft: 4 }}>{isCompared ? t('inCompare') : t('addCompare')}</span>
+        </Button>
+        <Button
+          style={{ flex: 1 }}
+          color="success"
+          fill="none"
+          onClick={handleAIAnalysis}
+        >
+          🤖 AI
         </Button>
         <Button
           style={{ flex: 1.5 }}
@@ -436,6 +534,16 @@ export default function DetailPage() {
         actions={[
           { key: 'cancel', text: t('cancel'), onClick: () => setContactVisible(false) },
           { key: 'confirm', text: t('contactConfirm'), bold: true, color: 'warning', onClick: handleContactConfirm },
+        ]}
+      />
+
+      {/* AI Analysis Dialog */}
+      <Dialog
+        visible={aiVisible}
+        onClose={() => { setAIVisible(false); setAIAnalysis(null) }}
+        content={renderAIAnalysisContent()}
+        actions={[
+          { key: 'close', text: '关闭', onClick: () => { setAIVisible(false); setAIAnalysis(null) } },
         ]}
       />
     </div>

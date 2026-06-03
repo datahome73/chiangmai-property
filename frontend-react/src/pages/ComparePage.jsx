@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { NavBar, Button, Tag, Toast, Empty, Dialog } from 'antd-mobile'
 import useCompareStore from '../stores/compareStore'
 import usePropertyStore from '../stores/propertyStore'
-import { fetchPropertyCompare } from '../api'
+import { fetchPropertyCompare, fetchAICompare } from '../api'
 import { useT } from '../i18n'
 
 const COMPARE_FIELDS = [
@@ -41,6 +41,9 @@ export default function ComparePage() {
   const getPriceLabel = usePropertyStore((s) => s.getPriceLabel)
 
   const [selectVisible, setSelectVisible] = useState(false)
+  const [aiResult, setAIResult] = useState(null)
+  const [aiLoading, setAILoading] = useState(false)
+  const [aiVisible, setAIVisible] = useState(false)
 
   // Load more properties for selection
   useEffect(() => {
@@ -116,6 +119,105 @@ export default function ComparePage() {
       content: t('confirmClear'),
       onConfirm: () => clearAll(),
     })
+  }
+
+  const handleAIAnalyze = async () => {
+    if (count === 0) {
+      Toast.show({ icon: 'fail', content: '请先添加房源到比价列表' })
+      return
+    }
+    setAILoading(true)
+    setAIVisible(true)
+    try {
+      const ids = items.map(i => i.id)
+      const res = await fetchAICompare(ids)
+      setAIResult(res.data)
+    } catch (e) {
+      setAIResult({ error: 'AI 分析失败' })
+      Toast.show({ icon: 'fail', content: 'AI 分析失败' })
+    } finally {
+      setAILoading(false)
+    }
+  }
+
+  function renderAIResultContent() {
+    if (aiLoading) {
+      return (
+        <div style={{ textAlign: 'center', padding: '30px 0' }}>
+          <div className="adm-dot-loading" />
+          <div style={{ color: '#999', fontSize: 14, marginTop: 12 }}>AI 分析中...</div>
+        </div>
+      )
+    }
+    if (!aiResult || aiResult.error) {
+      return <div style={{ padding: 20, color: '#999' }}>{aiResult?.error || '暂无数据'}</div>
+    }
+
+    return (
+      <div style={{ padding: '0 4px' }}>
+        {/* 推荐摘要 */}
+        {aiResult.summaries && aiResult.summaries.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            {aiResult.summaries.map((s, i) => (
+              <div key={i} style={{
+                background: '#f0f5ff', borderRadius: 8, padding: '8px 12px', marginBottom: 6,
+                fontSize: 13, color: '#333',
+              }}>
+                {s}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 推荐结果 */}
+        {aiResult.recommendation && aiResult.recommendation.best_title && (
+          <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', borderRadius: 8, padding: '12px 14px', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, marginBottom: 4 }}>🏆 AI 推荐</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{aiResult.recommendation.best_title}</div>
+            {aiResult.recommendation.best_score && (
+              <div style={{ fontSize: 12, marginTop: 4, opacity: 0.8 }}>综合评分：{aiResult.recommendation.best_score} 分</div>
+            )}
+          </div>
+        )}
+
+        {/* 评分排名 */}
+        {aiResult.items && aiResult.items.length > 0 && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>📊 评分排名</div>
+            {aiResult.items.map((item, idx) => {
+              const score = item.value_score?.score
+              return (
+                <div key={item.property_id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '8px 12px', background: idx === 0 ? '#f6ffed' : '#fafafa',
+                  borderRadius: 6, marginBottom: 4,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 12, color: idx < 3 ? ['#f5222d','#fa8c16','#fadb14'][idx] : '#999' }}>
+                      #{idx + 1}
+                    </span>
+                    <span style={{ fontSize: 12, color: '#333', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.property_title || `房源 ${item.property_id}`}
+                    </span>
+                  </div>
+                  {score != null && (
+                    <span style={{ fontSize: 14, fontWeight: 600, color: score >= 80 ? '#52c41a' : score >= 60 ? '#faad14' : '#ff4d4f' }}>
+                      {score}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {aiResult.total_compared > 0 && (
+          <div style={{ fontSize: 11, color: '#ccc', textAlign: 'right', marginTop: 12 }}>
+            共对比 {aiResult.total_compared} 个房源
+          </div>
+        )}
+      </div>
+    )
   }
 
   const availableProperties = properties.filter((p) => !items.some((i) => i.id === p.id))
@@ -231,6 +333,9 @@ export default function ComparePage() {
             setSelectVisible(true)
           }}>
             {t('addProperty')}
+          </Button>
+          <Button size="small" color="success" fill="none" onClick={handleAIAnalyze}>
+            🤖 AI
           </Button>
           <Button size="small" onClick={handleClearAll}>
             {t('clearAll')}
@@ -374,6 +479,16 @@ export default function ComparePage() {
               onClick: () => setSelectVisible(false),
             },
           ],
+        ]}
+      />
+
+      {/* AI Compare Dialog */}
+      <Dialog
+        visible={aiVisible}
+        onClose={() => { setAIVisible(false); setAIResult(null) }}
+        content={renderAIResultContent()}
+        actions={[
+          { key: 'close', text: '关闭', onClick: () => { setAIVisible(false); setAIResult(null) } },
         ]}
       />
     </div>

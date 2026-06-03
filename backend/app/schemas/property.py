@@ -111,3 +111,33 @@ class CompareRequest(BaseModel):
 
 class CompareResponse(BaseModel):
     items: List[PropertyResponse]
+
+
+# ============================================================
+# AI 分析 Schema
+# ============================================================
+
+class AIAnalysisResponse(BaseModel):
+    property_id: int
+    property_title: Optional[str] = None
+    price_type: str = ""
+    price: Optional[float] = None
+    district: Optional[str] = None
+    price_assessment: dict = {}
+    value_score: dict = {}
+    trend: dict = {}
+    summary: str = ""
+    analysis_time: str = ""
+
+
+class CompareAnalysisResponse(BaseModel):
+    recommendation: dict = {}
+    items: List[AIAnalysisResponse] = []
+    summaries: List[str] = []
+    total_compared: int = 0
+
+
+class SmartSearchResponse(BaseModel):
+    parsed_query: dict = {}
+    total: int = 0
+    items: List[dict] = []
