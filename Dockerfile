@@ -32,4 +32,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python3 -c "import urllib.request, os; p=os.environ.get('PORT','8000'); urllib.request.urlopen(f'http://localhost:{p}/health')" || exit 1
 
 # Start
-CMD cd backend && python startup.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+CMD cd backend && (ls -la ../frontend-react/dist/ 2>/dev/null || echo "dist NOT FOUND at ../frontend-react/dist/"; ls -la /app/frontend-react/dist/ 2>/dev/null || echo "dist NOT FOUND at /app/frontend-react/dist/") && python startup.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
