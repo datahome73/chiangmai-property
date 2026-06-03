@@ -141,7 +141,7 @@ async def get_price_history(db: AsyncSession, property_id: int, limit: int = 10)
     stmt = (
         select(PriceHistory)
         .where(PriceHistory.property_id == property_id)
-        .order_by(PriceHistory.recorded_at.desc())
+        .order_by(PriceHistory.scraped_at.desc())
         .limit(limit)
     )
     result = await db.execute(stmt)
