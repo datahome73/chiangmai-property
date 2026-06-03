@@ -12,6 +12,9 @@ from sqlalchemy import text
 
 from app.core.database import engine, Base
 
+# 必须导入模型，否则 Base.metadata.create_all 不知道有哪些表
+import app.models.property  # noqa: F401  # registers Property, PriceHistory, User, Favorite, Comparison
+
 
 async def init_db():
     """创建表结构"""
