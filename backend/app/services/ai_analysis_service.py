@@ -883,12 +883,21 @@ async def smart_search(
     """自然语言搜索 → 结构化查询 → 召回结果"""
     filters = parse_natural_search(query)
 
+    # 从原始查询中提取纯关键词（去掉已被解析的部分）
+    extracted_keywords = query
+    if "district" in filters:
+        extracted_keywords = extracted_keywords.replace(filters["district"], "")
+    if "price_type" in filters:
+        for kw in ["出租", "租", "月租", "出售", "买", "卖", "购买"]:
+            extracted_keywords = extracted_keywords.replace(kw, "")
+    extracted_keywords = extracted_keywords.strip().strip("，,，.")
+
     # 调用现存的服务层
     from app.services.property_service import get_properties
     from app.schemas.property import PropertyFilterParams
 
     params = PropertyFilterParams(
-        keyword=query,  # 关键词依然是原始文本用于模糊匹配
+        keyword=extracted_keywords if extracted_keywords else None,
         page=page,
         page_size=page_size,
     )
