@@ -437,144 +437,431 @@ async def compare_analysis(
 
 
 # ============================================================
-# 3. 自然语言搜索解析（轻量版）
+# 3. 自然语言搜索解析（加强版）
 # ============================================================
+
+# ── 清迈常见区域别名表 ──
+_DISTRICT_ALIASES = {
+    # 古城/市中心
+    "古城": "古城", "old city": "古城", "老城": "古城",
+    "市中心": "市中心", "downtown": "市中心", "city center": "市中心",
+    # 宁曼路
+    "宁曼": "宁曼", "尼曼": "宁曼", "尼曼路": "宁曼",
+    "nimman": "宁曼", "尼曼翰明": "宁曼",
+    # 长康路/夜市
+    "长康": "长康", "夜市": "长康", "night bazaar": "长康", "长康路": "长康",
+    # 杭东
+    "杭东": "杭东", "hang dong": "杭东",
+    # 山甘烹
+    "山甘烹": "山甘烹", "san kamphaeng": "山甘烹",
+    # 讪赛
+    "讪赛": "讪赛", "san sai": "讪赛",
+    # 湄林
+    "湄林": "湄林", "mae rim": "湄林",
+    # 湄登
+    "湄登": "湄登", "mae tang": "湄登",
+    # 沙拉丕
+    "沙拉丕": "沙拉丕", "saraphi": "沙拉丕",
+    # 南奔
+    "南奔": "南奔", "lamphun": "南奔",
+    # 尚泰/central festival 周边
+    "central": "尚泰", "central festival": "尚泰", "尚泰": "尚泰",
+    # 清迈大学
+    "清迈大学": "清迈大学", "cmu": "清迈大学", "大学": "清迈大学",
+    # 湄夏
+    "湄夏": "湄夏", "mae hia": "湄夏",
+    # 帕坦/界遥
+    "帕坦": "帕坦", "界遥": "帕坦", "jed yod": "帕坦",
+    # 三王广场/昌莫伊
+    "三王广场": "三王广场", "昌莫伊": "昌莫伊", "chang moi": "昌莫伊",
+    # 瓦洛洛市场
+    "瓦洛洛": "瓦洛洛", "warorot": "瓦洛洛",
+    # 清迈门
+    "清迈门": "清迈门", "chiang mai gate": "清迈门", "南门": "清迈门",
+    # 塔佩门
+    "塔佩": "塔佩", "tha pae": "塔佩", "东门": "塔佩",
+    # 湄萍河
+    "萍河": "萍河", "ping river": "萍河", "河边": "萍河", "河畔": "萍河",
+    # 二环/outer ring
+    "二环": "二环", "outer ring": "二环", "外环": "二环",
+    # 清迈机场
+    "机场": "机场", "airport": "机场",
+    # 圣巴
+    "圣巴": "圣巴", "san pa tong": "圣巴",
+    # Doi Saket
+    "doi saket": "堆沙革", "堆沙革": "堆沙革",
+    # 猜巴干
+    "chai prakan": "猜巴干", "猜巴干": "猜巴干",
+    # 方县
+    "fang": "方县", "方县": "方县",
+}
+
+# ── 中文数字映射 ──
+_CN_NUM = {
+    "零": 0, "一": 1, "二": 2, "两": 2, "俩": 2,
+    "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+    "十": 10, "百": 100, "千": 1000,
+}
+_CN_NUM_UNIT = {"十": 10, "百": 100, "千": 1000, "万": 10000}
+
+# ── 物业设施关键词 ──
+_AMENITY_KEYWORDS = {
+    "泳池": "pool", "游泳池": "pool", "swimming pool": "pool",
+    "健身房": "gym", "gym": "gym",
+    "停车": "parking", "parking": "parking", "车位": "parking",
+    "电梯": "elevator", "elevator": "elevator", "lift": "elevator",
+    "保安": "security", "security": "security", "24小时": "security",
+    "花园": "garden", "garden": "garden", "院子": "garden",
+    "阳台": "balcony", "balcony": "balcony", "露台": "balcony",
+}
+
+
+def _parse_cn_number(text: str) -> Optional[float]:
+    """解析中文数字：'二百五'→250, '三千'→3000, '两万五'→25000, '十二'→12"""
+    if not text:
+        return None
+    # 纯阿拉伯数字直接返回
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    total = 0
+    current = 0
+    for ch in text:
+        if ch in _CN_NUM:
+            v = _CN_NUM[ch]
+            if v >= 10:  # 十百千万是单位
+                if current == 0:
+                    current = v  # '十'开头 = 10, '百'开头 = 100
+                else:
+                    current *= v
+            else:
+                current += v
+        else:
+            # 遇到非中文数字字符，flush
+            total += current
+            current = 0
+    total += current
+    return float(total) if total > 0 else None
+
 
 def parse_natural_search(query: str) -> dict:
     """
     解析自然语言搜索查询为结构化筛选条件。
     纯规则引擎，不依赖 LLM。
 
-    支持模式：
-    - 区域：XX区 / XX附近 / XX区域
-    - 价格：1万以下 / 5000-10000 / 不超过2万 / 大于3万
-    - 户型：两室/2室/3房/一居
-    - 类型：公寓/别墅/condo/house
-    - 楼层：不要一楼 / 高层 / 带电梯
+    支持扩展模式：
+    - 区域：古城、尼曼、杭东、central、清迈大学附近...
+    - 价格：1万以下、5000-10000、不超过2万、大于3万
+            两万以内、฿15000、一千五、三百多
+    - 户型：一房一厅、开间、两室、3室、studio
+    - 类型：公寓、condo、别墅、house、联排
+    - 设施：带泳池、要电梯、不要一楼、要阳台
+    - 排序：最便宜、离古城近、性价比
+    - 排除：不要顶楼、不要路边
     """
     if not query or not query.strip():
         return {}
 
-    q = query.strip()
+    q = query.strip().lower()
     filters = {}
 
-    # 1. 提取区域
-    # 模式：XX区、XX区域、XX附近
+    # ═══════════════════════════════════════════
+    # 1. 区域提取（别名映射）
+    # ═══════════════════════════════════════════
     import re
-    district_pattern = re.compile(r'([\u4e00-\u9fff]{2,6})(?:区|区域|附近|片区)')
-    m = district_pattern.search(q)
-    if m:
-        filters["district"] = m.group(1)
+    # 先尝试精确匹配别名表
+    matched_districts = []
+    for alias, canonical in _DISTRICT_ALIASES.items():
+        if alias in q:
+            matched_districts.append(canonical)
+    if matched_districts:
+        # 取最长匹配（最具体）
+        filters["district"] = max(set(matched_districts), key=len)
 
-    # 2. 提取价格
-    # 模式：1万以下 / 1万以上 / 5000-10000 / 不超过2万 / 大于3万 / 1万到2万
-    # 先匹配"数字+万+以下/以上"这种结构
-    compound_below = re.compile(r'(\d+(?:\.\d+)?)\s*[万千]\s*(?:以下|以内)')
-    m = compound_below.search(q)
+    # 区域后缀模式：XX区 / XX附近 / XX区域 / XX片区 / XX周边
+    if "district" not in filters:
+        for suffix in ["区", "附近", "区域", "片区", "周边", "板块", "地段"]:
+            pat = re.compile(rf"([\u4e00-\u9fff]{{2,6}}){re.escape(suffix)}")
+            m = pat.search(q)
+            if m:
+                filters["district"] = m.group(1)
+                break
+
+    # ═══════════════════════════════════════════
+    # 2. 价格提取（全面覆盖）
+    # ═══════════════════════════════════════════
+    # 先检测是否包含泰铢符号
+    has_thb = "฿" in q or "thb" in q
+
+    def _resolve_unit(q_local: str, default=1) -> int:
+        """判断价格是 '万' '千' 还是原始数字"""
+        if "万" in q_local:
+            return 10000
+        if "千" in q_local or "k" in q_local.replace("฿", ""):
+            return 1000
+        if "百" in q_local:
+            return 100
+        return default
+
+    # ---- 2a. 先检查是否是面积区间而不是价格区间
+    area_range_check = re.compile(r"(\d{3,8})\s*(?:[-～~至到]|to)\s*(\d{3,8})\s*(?:平|㎡|sqm|平方米|平米)")
+    if not area_range_check.search(q.replace(",", "")):
+        bare_range = re.compile(
+            r"(?:฿)?(\d{3,8})\s*(?:[-～~至到]|to)\s*(?:฿)?(\d{3,8})"
+        )
+        m = bare_range.search(q.replace(",", ""))
     if m:
-        filters["max_price"] = float(m.group(1)) * 10000
-    else:
-        compound_above = re.compile(r'(\d+(?:\.\d+)?)\s*[万千]\s*(?:以上|以外)')
-        m = compound_above.search(q)
+        unit = _resolve_unit(q)
+        # 如果数字明显是"月"价级别(低于1000视为错误)
+        v1, v2 = float(m.group(1)), float(m.group(2))
+        if v1 < 100:
+            unit = 1  # 小数字不做万/千换算
+        filters["min_price"] = v1 * unit
+        filters["max_price"] = v2 * unit
+
+    # ---- 2b. 中文数字区间: "五千到一万" / "两千~三千"
+    if "min_price" not in filters:
+        cn_range = re.compile(
+            r"([\u4e00-\u9fff十百千万\d]{1,8})\s*(?:[-～~至到]|到|至)\s*([\u4e00-\u9fff十百千万\d]{1,8})"
+        )
+        m = cn_range.search(q)
         if m:
-            filters["min_price"] = float(m.group(1)) * 10000
+            v1 = _parse_cn_number(m.group(1))
+            v2 = _parse_cn_number(m.group(2))
+            if v1 and v2:
+                unit = _resolve_unit(q)
+                filters["min_price"] = v1 * unit
+                filters["max_price"] = v2 * unit
 
-    # 区间模式：1万到2万 / 1万-2万 / 1万~2万
-    price_range = re.compile(r'(\d+(?:\.\d+)?)\s*[万千]?\s*(?:到|至|-|~|～)\s*(\d+(?:\.\d+)?)\s*[万千]?')
-    m = price_range.search(q)
-    if m:
-        filters["min_price"] = float(m.group(1)) * (10000 if "万" in q else 1)
-        filters["max_price"] = float(m.group(2)) * (10000 if "万" in q else 1)
-    else:
-        # 前置词模式：不超过2万 / 低于1万 / 大于3万 / 不超过15000 / 不低于2万 / 不小于8000 / 不大于3万
-        # 先匹配长的否定模式
-        negation_pattern = re.compile(r'(?:不大于|不小于|不低于|不少于)\s*(\d+(?:\.\d+)?)\s*[万千]?')
-        m_neg = negation_pattern.search(q)
-        
-        if m_neg:
-            kw = m_neg.group(0)
-            val = float(m_neg.group(1))
-            if '不大于' in kw:
-                filters["max_price"] = val * (10000 if '万' in q else 1)
-            else:  # 不小于 / 不低于
-                filters["min_price"] = val * (10000 if '万' in q else 1)
-        else:
-            # 上限词：不超过 / 低于 / 少于 / 小于（但不匹配"不低于""不少于"）
-            below_pattern = re.compile(r'(?<!不)(?:超过?|低于?|少于|小于)\s*(\d+(?:\.\d+)?)\s*[万千]?')
-            # 保留"不超过"的精确匹配
-            not_exceed = re.compile(r'不超过\s*(\d+(?:\.\d+)?)\s*[万千]?')
-            
-            # 下限词：超过 / 高于 / 多于 / 大于（后面有"不"前缀的排除）
-            above_pattern = re.compile(r'(?<!不)(?:超过?|高于?|多于|大于)\s*(\d+(?:\.\d+)?)\s*[万千]?')
-            
-            m_below = not_exceed.search(q)
-            if m_below:
-                v = float(m_below.group(1))
-                unit = "万" if ("万" in m_below.group(0) or "万" in q) else ("千" if ("千" in m_below.group(0) or "千" in q) else None)
-                if unit:
-                    filters["max_price"] = v * (10000 if unit == "万" else 1000)
+    # ---- 2c. 上限表达: "XX以下/以内/不超过/不超/低于.../少于/预算XX"
+    # 先处理"每月/月租+数字"模式 — 数字前有中文前缀
+    m_monthly = re.search(r"(?:每月|月租|月)\s*(\d{3,8})", q)
+    if m_monthly:
+        filters["max_price"] = float(m_monthly.group(1))
+    if "max_price" not in filters:
+        cap_keywords = r"(?:不超过?|不超|预算|控制在|低于?|少于|小于|不大于|最多)"
+        m = re.search(rf"{cap_keywords}\s*(\S+)", q)
+        if m:
+            raw = m.group(1)
+            val = _parse_cn_number(raw)
+            if val is None:
+                try:
+                    val = float(raw.replace(",", ""))
+                except ValueError:
+                    val = None
+            if val is not None:
+                if val <= 1000 and "万" not in q and "千" not in q:
+                    unit_val = val
+                elif val <= 100 and ("百" in q or "百" in raw):
+                    unit_val = val * 100
                 else:
-                    filters["max_price"] = v
-            
-            m_below2 = below_pattern.search(q)
-            if m_below2:
-                v = float(m_below2.group(1))
-                unit = "万" if ("万" in m_below2.group(0) or "万" in q) else ("千" if ("千" in m_below2.group(0) or "千" in q) else None)
-                if unit:
-                    filters["max_price"] = v * (10000 if unit == "万" else 1000)
-                else:
-                    filters["max_price"] = v
+                    unit_val = val * _resolve_unit(q)
+                filters["max_price"] = unit_val
 
-            m_above = above_pattern.search(q)
-            if m_above:
-                v = float(m_above.group(1))
-                unit = "万" if ("万" in m_above.group(0) or "万" in q) else ("千" if ("千" in m_above.group(0) or "千" in q) else None)
-                if unit:
-                    filters["min_price"] = v * (10000 if unit == "万" else 1000)
+    # 后缀式上限: "XX以下/以内"
+    if "max_price" not in filters:
+        m = re.search(r"(\S+)\s*(?:以下|以内|以内吧)", q)
+        if m:
+            raw = m.group(1)
+            val = _parse_cn_number(raw)
+            if val is None:
+                try:
+                    val = float(raw.replace(",", ""))
+                except ValueError:
+                    val = None
+            if val is not None:
+                if val <= 1000 and "万" not in q and "千" not in q:
+                    unit_val = val
+                elif val <= 100 and ("百" in q or "百" in raw):
+                    unit_val = val * 100
                 else:
-                    filters["min_price"] = v
+                    unit_val = val * _resolve_unit(q)
+                filters["max_price"] = unit_val
 
-    # 裸数字区间：5000-10000
+    # ---- 2d. 下限表达: "XX以上/超过/高于/不少于..."
+    if "min_price" not in filters:
+        floor_keywords = r"(?:不少于|不低于|超过?|高于?|多于|大于|至少|最少)"
+        m = re.search(rf"{floor_keywords}\s*(\S+)", q)
+        if m:
+            raw = m.group(1)
+            val = _parse_cn_number(raw)
+            if val is None:
+                try:
+                    val = float(raw.replace(",", ""))
+                except ValueError:
+                    val = None
+            if val is not None:
+                if val <= 1000 and "万" not in q and "千" not in q:
+                    unit_val = val
+                elif val <= 100 and ("百" in q or "百" in raw):
+                    unit_val = val * 100
+                else:
+                    unit_val = val * _resolve_unit(q)
+                filters["min_price"] = unit_val
+
+    # 后缀式下限: "XX以上"
+    if "min_price" not in filters:
+        m = re.search(r"(\S+)\s*(?:以上)", q)
+        if m:
+            raw = m.group(1)
+            val = _parse_cn_number(raw)
+            if val is None:
+                try:
+                    val = float(raw.replace(",", ""))
+                except ValueError:
+                    val = None
+            if val is not None:
+                if val <= 1000 and "万" not in q and "千" not in q:
+                    unit_val = val
+                elif val <= 100 and ("百" in q or "百" in raw):
+                    unit_val = val * 100
+                else:
+                    unit_val = val * _resolve_unit(q)
+                filters["min_price"] = unit_val
+
+    # ---- 2e. 裸数字（单个大数如 "一万五" "25000"）
     if "min_price" not in filters and "max_price" not in filters:
-        bare_range = re.compile(r'(\d{4,6})\s*[-～~至到]\s*(\d{4,6})')
-        m = bare_range.search(q)
+        # 匹配"数字+万/千"结构（如 "一万五""25000"）
+        standalone_pat = re.compile(r"(?:(\d[\d,.万万千千百百]*|[\u4e00-\u9fff十百千万\d]+))\s*(?:的|左右|以内)?$")
+        m = standalone_pat.search(q)
         if m:
-            filters["min_price"] = float(m.group(1))
-            filters["max_price"] = float(m.group(2))
+            raw = m.group(1)
+            # 泰铢数字直接按原值处理
+            if has_thb:
+                try:
+                    filters["max_price"] = float(raw.replace(",", ""))
+                except ValueError:
+                    pass
+            else:
+                val = _parse_cn_number(raw)
+                if val:
+                    unit = _resolve_unit(q)
+                    filters["max_price"] = val * unit
 
-    # 3. 提取户型
-    rooms_pattern = re.compile(r'(\d)\s*(?:室|房|居|卧|bed|br|beds)')
-    m = rooms_pattern.search(q)
+    # ═══════════════════════════════════════════
+    # 3. 户型提取
+    # ═══════════════════════════════════════════
+    # --- 3a. 数字+室/房/卧/居
+    rooms_digit = re.compile(r"(\d)\s*(?:室|房|卧|居|bed|br|beds?|卧室|房间)")
+    m = rooms_digit.search(q)
     if m:
         filters["bedrooms"] = int(m.group(1))
+    else:
+        # --- 3b. 中文数字户型: "一室""两房""三居""两室一厅"
+        cn_rooms = re.compile(r"([一两三四五六七八九])\s*(?:室|房|卧|居)")
+        m = cn_rooms.search(q)
+        if m:
+            filters["bedrooms"] = int(_CN_NUM.get(m.group(1), 0))
+        else:
+            # --- 3c. "一房一厅" → 至少1房
+            if re.search(r"[一]房", q):
+                filters["bedrooms"] = 1
+            elif re.search(r"(开间|studio|一居|单间|大开间)", q):
+                filters["bedrooms"] = 0
+                filters["property_subtype"] = "studio"
 
-    # 4. 提取类型
-    type_keywords = {
+    # ═══════════════════════════════════════════
+    # 4. 物业类型
+    # ═══════════════════════════════════════════
+    type_map = {
         "condo": "CONDO", "公寓": "CONDO",
-        "house": "HOUSE", "别墅": "HOUSE", "独栋": "HOUSE",
-        "townhouse": "TOWNHOUSE", "联排": "TOWNHOUSE",
-        "apartment": "APARTMENT", "普通公寓": "APARTMENT",
+        "house": "HOUSE", "别墅": "HOUSE", "独栋": "HOUSE", "独院": "HOUSE",
+        "townhouse": "TOWNHOUSE", "联排": "TOWNHOUSE", "联排别墅": "TOWNHOUSE",
+        "apartment": "APARTMENT", "普通公寓": "APARTMENT", "apart": "APARTMENT",
+        "店面": "SHOPHOUSE", "shophouse": "SHOPHOUSE", "shop house": "SHOPHOUSE",
+        "土地": "LAND", "地皮": "LAND", "land": "LAND", "地块": "LAND",
     }
-    for keyword, value in type_keywords.items():
+    for keyword, value in type_map.items():
         if keyword in q:
             filters["property_type"] = value
             break
 
-    # 5. 价格类型识别
-    if any(kw in q for kw in ["出租", "租", "月租", "rent"]):
+    # ═══════════════════════════════════════════
+    # 5. 价格类型（出租/出售）
+    # ═══════════════════════════════════════════
+    if any(kw in q for kw in ["出租", "租", "月租", "rent", "lease", "for rent", "短租", "长租"]):
         filters["price_type"] = "RENT"
-    elif any(kw in q for kw in ["出售", "买", "卖", "购买", "sale", "buy"]):
+    elif any(kw in q for kw in ["出售", "买", "卖", "购买", "sale", "buy", "for sale", "置业"]):
         filters["price_type"] = "SALE"
 
+    # ═══════════════════════════════════════════
     # 6. 排序
-    if any(kw in q for kw in ["便宜", "低价", "最便宜", "性价比"]):
+    # ═══════════════════════════════════════════
+    if any(kw in q for kw in ["便宜", "低价", "最便宜", "性价比", "捡漏", "划算", "最低价"]):
         filters["sort_by"] = "price_asc"
-    elif any(kw in q for kw in ["最新", "新房源"]):
+    elif any(kw in q for kw in ["最新", "新房源", "刚上", "新上"]):
         filters["sort_by"] = "newest"
+    elif any(kw in q for kw in ["最近", "离我近"]):
+        filters["sort_by"] = "distance"
+    elif "附近" in q and "区域" not in q and "片区" not in q and "周边" not in q:
+        filters["sort_by"] = "distance"
 
-    # 7. 是否有"不要一楼"
-    if "不要" in q and "一楼" in q:
+    # ═══════════════════════════════════════════
+    # 7. 楼层排除/偏好
+    # ═══════════════════════════════════════════
+    if re.search(r"(不要|别|避免|避开|排除)\s*(一楼|底层)", q):
         filters["exclude_first_floor"] = True
+    if re.search(r"(不要|别|避免|避开|排除)\s*(顶楼|顶层|天台)", q):
+        filters["exclude_top_floor"] = True
+    if "高层" in q or "高楼层" in q or ("楼层" in q and "高" in q):
+        filters["prefer_high_floor"] = True
+
+    # ═══════════════════════════════════════════
+    # 8. 设施偏好
+    # ═══════════════════════════════════════════
+    amenities = []
+    for keyword, canonical in _AMENITY_KEYWORDS.items():
+        if keyword in q:
+            if "不要" in q and keyword in q[q.index("不要") if "不要" in q else 0:]:
+                # "不要带泳池" → 排除
+                filters.setdefault("exclude_amenities", []).append(canonical)
+            else:
+                amenities.append(canonical)
+    if amenities:
+        filters["amenities"] = list(set(amenities))
+
+    # ═══════════════════════════════════════════
+    # 9. 面积提取
+    # ═══════════════════════════════════════════
+    area_pat = re.compile(r"(\d+)\s*(?:平|㎡|sqm|sq m|平方米|平米)")
+    m = area_pat.search(q)
+    if m:
+        area_val = float(m.group(1))
+        # 判断是下限还是上限
+        if any(kw in q for kw in ["以上", "大于", "至少", "以上", "起步"]):
+            filters["min_area"] = area_val
+        elif any(kw in q for kw in ["以下", "以内", "小于", "不超"]):
+            filters["max_area"] = area_val
+        elif any(kw in q for kw in ["左右", "大概"]):
+            filters["min_area"] = area_val * 0.8
+            filters["max_area"] = area_val * 1.2
+        elif any(kw in q for kw in ["到", "至", "-"]):
+            # 应该已经被区间模式匹配了
+            pass
+        else:
+            filters["max_area"] = area_val  # 默认作为上限
+
+    # ═══════════════════════════════════════════
+    # 10. 面积范围: "50-80平"
+    # ═══════════════════════════════════════════
+    area_range = re.compile(r"(\d+)\s*(?:[-～~至到]|to)\s*(\d+)\s*(?:平|㎡|sqm|平方米)")
+    m = area_range.search(q)
+    if m:
+        filters["min_area"] = float(m.group(1))
+        filters["max_area"] = float(m.group(2))
+
+    # ═══════════════════════════════════════════
+    # 11. 卧室+面积组合: "两室一厅80平"
+    # ═══════════════════════════════════════════
+    room_area = re.compile(r"([一两三四五六七八九十\d])[室房](?:一[厅]?)?[约约]?(\d+)[平㎡]")
+    m = room_area.search(q)
+    if m:
+        room_val = _parse_cn_number(m.group(1))
+        if room_val:
+            filters["bedrooms"] = int(room_val)
+        filters.setdefault("min_area", float(m.group(2)) * 0.8)
+        filters.setdefault("max_area", float(m.group(2)) * 1.2)
 
     return filters
 
