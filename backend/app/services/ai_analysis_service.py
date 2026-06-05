@@ -883,14 +883,32 @@ async def smart_search(
     """自然语言搜索 → 结构化查询 → 召回结果"""
     filters = parse_natural_search(query)
 
-    # 从原始查询中提取纯关键词（去掉已被解析的部分）
+    # 从原始查询中提取纯关键词（去掉已被解析的部分和户型/价格类词汇）
     extracted_keywords = query
-    if "district" in filters:
-        extracted_keywords = extracted_keywords.replace(filters["district"], "")
-    if "price_type" in filters:
-        for kw in ["出租", "租", "月租", "出售", "买", "卖", "购买"]:
-            extracted_keywords = extracted_keywords.replace(kw, "")
-    extracted_keywords = extracted_keywords.strip().strip("，,，.")
+    import re as _re
+    # 去掉区域名
+    for alias in _DISTRICT_ALIASES:
+        extracted_keywords = extracted_keywords.replace(alias, "")
+    # 去掉价格类词汇
+    for kw in ["出租", "租", "月租", "出售", "买", "卖", "购买", "出售",
+               "以下", "以内", "以上", "不超过", "预算", "超过", "高于", "低于",
+               "万", "千", "฿", "以内", "左右", "大概"]:
+        extracted_keywords = extracted_keywords.replace(kw, "")
+    # 去掉户型类词汇
+    extracted_keywords = _re.sub(
+        r"[一两三四五六七八九十\d零]\s*(?:室|房|卧|居|bed|br|beds?|厅|卫生间|卫)|"
+        r"(?:开间|studio|一居|单间|大开间|一房一厅|两室一厅|三室一厅)",
+        "", extracted_keywords
+    )
+    # 去掉设施类词汇
+    for kw in ["泳池", "游泳池", "健身房", "电梯", "停车位", "阳台", "花园", "带"]:
+        extracted_keywords = extracted_keywords.replace(kw, "")
+    # 去掉排序类词汇
+    for kw in ["最便宜", "便宜", "性价比", "最新", "新房源", "附近"]:
+        extracted_keywords = extracted_keywords.replace(kw, "")
+    extracted_keywords = _re.sub(r"\s+", "", extracted_keywords).strip("，,，. ")
+    if not extracted_keywords or len(extracted_keywords) < 2:
+        extracted_keywords = None
 
     # 调用现存的服务层
     from app.services.property_service import get_properties
