@@ -16,75 +16,6 @@ from app.api.v1.favorites import router as favorites_router
 from app.api.v1.comparisons import router as comparisons_router
 
 
-# ── Seed 数据接口 (仅开发/管理用) ──
-@app.post("/api/v1/seed")
-async def seed_data():
-    """注入50条演示房源数据"""
-    try:
-        import random
-        from datetime import datetime, timedelta
-        from app.core.database import async_session_factory
-        from app.models.property import Property, PriceHistory, User, PriceType, PropertyType
-
-        DISTRICTS = [
-            ("古城", 18.7883, 98.9853), ("宁曼路", 18.8000, 98.9680),
-            ("长康路", 18.7800, 98.9980), ("杭东", 18.6870, 98.9190),
-            ("讪赛", 18.8500, 99.0500), ("湄林", 18.9000, 98.9500),
-            ("山甘烹", 18.7400, 99.1200), ("沙拉丕", 18.7000, 99.0100),
-            ("东岸", 18.8200, 99.0200), ("清迈大学附近", 18.8050, 98.9550),
-        ]
-        NAMES = ["Supalai Monte", "The Astra Condo", "D Condo Sign",
-                 "Punna Oasis", "Hillside Plaza", "Burasiri San Sai",
-                 "The Shine Nimman", "The Unique Condo", "Punna Garden",
-                 "Baan Kachana", "The Spring Condo", "My Hip Condo"]
-        RENTS = [5000, 8000, 10000, 12000, 15000, 18000, 22000, 28000, 35000, 45000]
-        SALES = [1500000, 2000000, 2800000, 3500000, 4500000, 5500000, 7000000, 8900000, 12000000, 18000000]
-        SQM = [25, 30, 35, 40, 45, 50, 60, 75, 90, 110, 140, 180]
-        TYPES = [PropertyType.CONDO, PropertyType.CONDO, PropertyType.HOUSE,
-                 PropertyType.TOWNHOUSE, PropertyType.APARTMENT, PropertyType.CONDO]
-
-        async with async_session_factory() as db:
-            # 清空
-            for table in [PriceHistory, Property]:
-                await db.execute(table.__table__.delete())
-
-            for i in range(50):
-                d_name, lat, lng = random.choice(DISTRICTS)
-                is_rent = random.random() > 0.35
-                beds = random.choice([1, 1, 2, 2, 2, 3, 3, 4])
-                baths = min(beds + random.choice([0, 1, 1]), 5)
-                area = random.choice(SQM)
-                prop = Property(
-                    title=f"{d_name} — {random.choice(NAMES)}",
-                    description=f"{beds}卧{baths}卫 {area}㎡ 位于{d_name}",
-                    price_rent=random.choice(RENTS) if is_rent else None,
-                    price_sale=random.choice(SALES) if not is_rent else None,
-                    currency="THB",
-                    price_type=PriceType.RENT if is_rent else PriceType.SALE,
-                    bedrooms=beds, bathrooms=baths, area_sqm=area,
-                    floor=random.randint(1, 15), total_floors=random.randint(5, 18),
-                    furnished=random.random() > 0.2,
-                    property_type=random.choice(TYPES),
-                    address=f"{d_name}区，清迈", district=d_name,
-                    sub_district=random.choice(["Pa Tan", "Suthep", "Chang Phueak", "Hai Ya"]),
-                    lat=lat + (random.random() - 0.5) * 0.03,
-                    lng=lng + (random.random() - 0.5) * 0.03,
-                    source=random.choice(["ddproperty", "hipflat", "fazwaz"]),
-                    source_url=f"https://example.com/{i}",
-                    source_id=f"seed_{i}",
-                    images=[f"https://picsum.photos/seed/cm{i}{ch}/800/500" for ch in ['a', 'b']],
-                    is_active=True,
-                    posted_date=datetime.utcnow() - timedelta(days=random.randint(0, 60)),
-                )
-                db.add(prop)
-            await db.commit()
-
-        return {"status": "ok", "message": "注入50条种子数据完成"}
-    except Exception as e:
-        import traceback
-        return {"status": "error", "message": str(e), "traceback": traceback.format_exc()}
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
@@ -130,6 +61,65 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "env": settings.ENV}
+
+
+# ── Seed 数据接口 ──
+@app.post("/api/v1/seed")
+async def seed_data():
+    """注入50条演示房源数据"""
+    try:
+        import random
+        from datetime import datetime, timedelta
+        from app.core.database import async_session_factory
+        from app.models.property import Property, PriceHistory, PriceType, PropertyType
+
+        DISTRICTS = [
+            ("古城", 18.7883, 98.9853), ("宁曼路", 18.8000, 98.9680),
+            ("长康路", 18.7800, 98.9980), ("杭东", 18.6870, 98.9190),
+            ("讪赛", 18.8500, 99.0500), ("湄林", 18.9000, 98.9500),
+            ("山甘烹", 18.7400, 99.1200), ("沙拉丕", 18.7000, 99.0100),
+            ("东岸", 18.8200, 99.0200), ("清迈大学附近", 18.8050, 98.9550),
+        ]
+        NAMES = ["Supalai Monte", "The Astra Condo", "D Condo Sign",
+                 "Punna Oasis", "Hillside Plaza", "Burasiri San Sai",
+                 "The Shine Nimman", "The Unique Condo", "Punna Garden",
+                 "Baan Kachana", "The Spring Condo", "My Hip Condo"]
+        RENTS = [5000, 8000, 10000, 12000, 15000, 18000, 22000, 28000, 35000, 45000]
+        SALES = [1500000, 2000000, 2800000, 3500000, 4500000, 5500000, 7000000, 8900000, 12000000, 18000000]
+        SQM = [25, 30, 35, 40, 45, 50, 60, 75, 90, 110, 140, 180]
+        TYPES = [PropertyType.CONDO, PropertyType.CONDO, PropertyType.HOUSE,
+                 PropertyType.TOWNHOUSE, PropertyType.APARTMENT, PropertyType.CONDO]
+
+        async with async_session_factory() as db:
+            for table in [PriceHistory, Property]:
+                await db.execute(table.__table__.delete())
+            for i in range(50):
+                d_name, lat, lng = random.choice(DISTRICTS)
+                is_rent = random.random() > 0.35
+                beds = random.choice([1, 1, 2, 2, 2, 3, 3, 4])
+                prop = Property(
+                    title=f"{d_name} — {random.choice(NAMES)}",
+                    description=f"{beds}卧{min(beds+1,5)}卫 {random.choice(SQM)}㎡",
+                    price_rent=random.choice(RENTS) if is_rent else None,
+                    price_sale=random.choice(SALES) if not is_rent else None,
+                    currency="THB",
+                    price_type=PriceType.RENT if is_rent else PriceType.SALE,
+                    bedrooms=beds, bathrooms=min(beds+1,5), area_sqm=random.choice(SQM),
+                    floor=random.randint(1, 15), total_floors=random.randint(5, 18),
+                    furnished=random.random() > 0.2, property_type=random.choice(TYPES),
+                    address=f"{d_name}区，清迈", district=d_name,
+                    lat=lat + (random.random() - 0.5) * 0.03,
+                    lng=lng + (random.random() - 0.5) * 0.03,
+                    source=random.choice(["ddproperty", "hipflat", "fazwaz"]),
+                    is_active=True,
+                    posted_date=datetime.utcnow() - timedelta(days=random.randint(0, 60)),
+                )
+                db.add(prop)
+            await db.commit()
+        return {"status": "ok", "message": "注入50条种子数据完成"}
+    except Exception as e:
+        import traceback
+        return {"status": "error", "message": str(e)}
 
 
 # ─── Serve Frontend Static Files (Production) ─────────────
