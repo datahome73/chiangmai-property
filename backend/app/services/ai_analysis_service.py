@@ -500,7 +500,7 @@ _DISTRICT_ALIASES = {
 _CN_NUM = {
     "零": 0, "一": 1, "二": 2, "两": 2, "俩": 2,
     "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
-    "十": 10, "百": 100, "千": 1000,
+    "十": 10, "百": 100, "千": 1000, "万": 10000,
 }
 _CN_NUM_UNIT = {"十": 10, "百": 100, "千": 1000, "万": 10000}
 
@@ -661,6 +661,8 @@ def parse_natural_search(query: str) -> dict:
                     unit_val = val
                 elif val <= 100 and ("百" in q or "百" in raw):
                     unit_val = val * 100
+                elif val >= 10000:
+                    unit_val = val  # _parse_cn_number 已处理"万"量级
                 else:
                     unit_val = val * _resolve_unit(q)
                 filters["max_price"] = unit_val
@@ -681,6 +683,8 @@ def parse_natural_search(query: str) -> dict:
                     unit_val = val
                 elif val <= 100 and ("百" in q or "百" in raw):
                     unit_val = val * 100
+                elif val >= 10000:
+                    unit_val = val  # _parse_cn_number 已处理"万"量级
                 else:
                     unit_val = val * _resolve_unit(q)
                 filters["max_price"] = unit_val
@@ -702,6 +706,8 @@ def parse_natural_search(query: str) -> dict:
                     unit_val = val
                 elif val <= 100 and ("百" in q or "百" in raw):
                     unit_val = val * 100
+                elif val >= 10000:
+                    unit_val = val  # _parse_cn_number 已处理"万"量级
                 else:
                     unit_val = val * _resolve_unit(q)
                 filters["min_price"] = unit_val
@@ -722,6 +728,8 @@ def parse_natural_search(query: str) -> dict:
                     unit_val = val
                 elif val <= 100 and ("百" in q or "百" in raw):
                     unit_val = val * 100
+                elif val >= 10000:
+                    unit_val = val  # _parse_cn_number 已处理"万"量级
                 else:
                     unit_val = val * _resolve_unit(q)
                 filters["min_price"] = unit_val
@@ -744,8 +752,11 @@ def parse_natural_search(query: str) -> dict:
             else:
                 val = _parse_cn_number(raw)
                 if val:
-                    unit = _resolve_unit(q)
-                    filters["max_price"] = val * unit
+                    if val >= 10000:
+                        filters["max_price"] = val
+                    else:
+                        unit = _resolve_unit(q)
+                        filters["max_price"] = val * unit
 
     # ═══════════════════════════════════════════
     # 3. 户型提取
