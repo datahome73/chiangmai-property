@@ -604,13 +604,19 @@ def parse_natural_search(query: str) -> dict:
             return 100
         return default
 
+    # ── 在价格提取前，先移除已确定的户型关键词，避免干扰 ──
+    rooms_removed = re.sub(
+        r"([一两三四五六七八九十\d])\s*(?:室|房|卧|居|bed|br|beds?)\s*(?:一[厅]?)?",
+        "", q
+    )
+
     # ---- 2a. 先检查是否是面积区间而不是价格区间
     area_range_check = re.compile(r"(\d{3,8})\s*(?:[-～~至到]|to)\s*(\d{3,8})\s*(?:平|㎡|sqm|平方米|平米)")
     if not area_range_check.search(q.replace(",", "")):
         bare_range = re.compile(
             r"(?:฿)?(\d{3,8})\s*(?:[-～~至到]|to)\s*(?:฿)?(\d{3,8})"
         )
-        m = bare_range.search(q.replace(",", ""))
+        m = bare_range.search(rooms_removed.replace(",", "") or q.replace(",", ""))
     if m:
         unit = _resolve_unit(q)
         # 如果数字明显是"月"价级别(低于1000视为错误)
@@ -625,7 +631,7 @@ def parse_natural_search(query: str) -> dict:
         cn_range = re.compile(
             r"([\u4e00-\u9fff十百千万\d]{1,8})\s*(?:[-～~至到]|到|至)\s*([\u4e00-\u9fff十百千万\d]{1,8})"
         )
-        m = cn_range.search(q)
+        m = cn_range.search(rooms_removed or q)
         if m:
             v1 = _parse_cn_number(m.group(1))
             v2 = _parse_cn_number(m.group(2))
@@ -641,7 +647,7 @@ def parse_natural_search(query: str) -> dict:
         filters["max_price"] = float(m_monthly.group(1))
     if "max_price" not in filters:
         cap_keywords = r"(?:不超过?|不超|预算|控制在|低于?|少于|小于|不大于|最多)"
-        m = re.search(rf"{cap_keywords}\s*(\S+)", q)
+        m = re.search(rf"{cap_keywords}\s*(\S+)", rooms_removed or q)
         if m:
             raw = m.group(1)
             val = _parse_cn_number(raw)
@@ -661,7 +667,7 @@ def parse_natural_search(query: str) -> dict:
 
     # 后缀式上限: "XX以下/以内"
     if "max_price" not in filters:
-        m = re.search(r"(\S+)\s*(?:以下|以内|以内吧)", q)
+        m = re.search(r"(\S+)\s*(?:以下|以内|以内吧)", rooms_removed or q)
         if m:
             raw = m.group(1)
             val = _parse_cn_number(raw)
@@ -682,7 +688,7 @@ def parse_natural_search(query: str) -> dict:
     # ---- 2d. 下限表达: "XX以上/超过/高于/不少于..."
     if "min_price" not in filters:
         floor_keywords = r"(?:不少于|不低于|超过?|高于?|多于|大于|至少|最少)"
-        m = re.search(rf"{floor_keywords}\s*(\S+)", q)
+        m = re.search(rf"{floor_keywords}\s*(\S+)", rooms_removed or q)
         if m:
             raw = m.group(1)
             val = _parse_cn_number(raw)
@@ -702,7 +708,7 @@ def parse_natural_search(query: str) -> dict:
 
     # 后缀式下限: "XX以上"
     if "min_price" not in filters:
-        m = re.search(r"(\S+)\s*(?:以上)", q)
+        m = re.search(r"(\S+)\s*(?:以上)", rooms_removed or q)
         if m:
             raw = m.group(1)
             val = _parse_cn_number(raw)
@@ -723,8 +729,10 @@ def parse_natural_search(query: str) -> dict:
     # ---- 2e. 裸数字（单个大数如 "一万五" "25000"）
     if "min_price" not in filters and "max_price" not in filters:
         # 匹配"数字+万/千"结构（如 "一万五""25000"）
+        # 用 rooms_removed 避免 "两室" 被当作价格
+        search_q = (rooms_removed or q).strip()
         standalone_pat = re.compile(r"(?:(\d[\d,.万万千千百百]*|[\u4e00-\u9fff十百千万\d]+))\s*(?:的|左右|以内)?$")
-        m = standalone_pat.search(q)
+        m = standalone_pat.search(search_q)
         if m:
             raw = m.group(1)
             # 泰铢数字直接按原值处理
