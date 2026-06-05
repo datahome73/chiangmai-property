@@ -39,8 +39,7 @@ async def get_properties(
     # --- Price range filter ---
     price_type_val = filters.price_type.value if filters.price_type else None
     if filters.min_price is not None or filters.max_price is not None:
-        if price_type_val == "rent" or price_type_val is None:
-            # Determine price column to filter
+        if price_type_val == "rent":
             price_col = Property.price_rent
             if filters.min_price is not None:
                 query = query.where(price_col >= filters.min_price)
@@ -52,8 +51,18 @@ async def get_properties(
                 query = query.where(price_col >= filters.min_price)
             if filters.max_price is not None:
                 query = query.where(price_col <= filters.max_price)
-    # Note: when price_type is "both", the min/max price applies loosely — handled above by
-    # falling through to price_rent as a reasonable default for the both case.
+        else:
+            # price_type 未指定时，同时匹配 rent 和 sale
+            if filters.min_price is not None:
+                query = query.where(
+                    (Property.price_rent >= filters.min_price) |
+                    (Property.price_sale >= filters.min_price)
+                )
+            if filters.max_price is not None:
+                query = query.where(
+                    (Property.price_rent <= filters.max_price) |
+                    (Property.price_sale <= filters.max_price)
+                )
 
     # --- Sorting ---
     sort_col = Property.scraped_at  # default
