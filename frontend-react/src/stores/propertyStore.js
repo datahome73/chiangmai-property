@@ -51,8 +51,8 @@ const usePropertyStore = create((set, get) => ({
         ...(filters.priceType && { price_type: filters.priceType.toUpperCase() }),
         ...(filters.bedrooms && { bedrooms: filters.bedrooms }),
         ...(filters.district && { district: filters.district }),
-        ...(filters.minPrice && { min_price: filters.minPrice * 36 }),
-        ...(filters.maxPrice && { max_price: filters.maxPrice * 36 }),
+        ...(filters.minPrice && { min_price: filters.minPrice }),
+        ...(filters.maxPrice && { max_price: filters.maxPrice }),
         ...(filters.source && { source: filters.source }),
         ...(filters.sort && { sort: filters.sort }),
       }

@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+from fastapi import HTTPException, Request
 from contextlib import asynccontextmanager
 import os
 import logging
@@ -39,6 +41,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 统一错误响应格式
+@app.exception_handler(HTTPException)
+async def unified_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "message": exc.detail, "detail": None},
+    )
+
+@app.exception_handler(Exception)
+async def unified_generic_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"code": 500, "message": "Internal server error", "detail": None},
+    )
 
 # API Routes
 app.include_router(properties_router, prefix="/api/v1")

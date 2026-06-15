@@ -58,9 +58,10 @@ async def list_properties(
     min_price: Optional[float] = Query(None, description="最低价格"),
     max_price: Optional[float] = Query(None, description="最高价格"),
     bedrooms: Optional[int] = Query(None, description="卧室数量"),
-    sort_by: str = Query("default", description="排序方式: default/price_asc/price_desc/newest"),
+    sort_by: str = Query("default", description="排序方式: default/price_asc/price_desc/newest/area_asc/area_desc"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    source: Optional[str] = Query(None, description="数据来源筛选: hipflat/fazwaz/ddproperty"),
     db: AsyncSession = Depends(get_db),
 ):
     """搜索房产列表"""
@@ -73,6 +74,7 @@ async def list_properties(
         max_price=max_price,
         bedrooms=bedrooms,
         sort_by=sort_by,
+        source=source,
         page=page,
         page_size=page_size,
     )

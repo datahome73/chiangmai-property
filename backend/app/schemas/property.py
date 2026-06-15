@@ -64,7 +64,8 @@ class PropertyFilterParams(BaseModel):
     min_price: Optional[float] = None
     max_price: Optional[float] = None
     bedrooms: Optional[int] = None
-    sort_by: Optional[str] = None  # price_asc, price_desc, newest
+    sort_by: Optional[str] = None  # price_asc, price_desc, newest, area_asc, area_desc
+    source: Optional[str] = None
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
 

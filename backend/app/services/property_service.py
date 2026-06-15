@@ -64,6 +64,10 @@ async def get_properties(
                     (Property.price_sale <= filters.max_price)
                 )
 
+    # --- Source filter ---
+    if filters.source:
+        query = query.where(Property.source == filters.source)
+
     # --- Sorting ---
     sort_col = Property.scraped_at  # default
     sort_asc = False  # default desc
@@ -83,6 +87,12 @@ async def get_properties(
             sort_asc = False
         elif filters.sort_by == "newest":
             sort_col = Property.posted_date
+            sort_asc = False
+        elif filters.sort_by == "area_asc":
+            sort_col = Property.area_sqm
+            sort_asc = True
+        elif filters.sort_by == "area_desc":
+            sort_col = Property.area_sqm
             sort_asc = False
 
     if sort_asc:

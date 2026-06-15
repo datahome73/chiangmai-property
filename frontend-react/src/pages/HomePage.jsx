@@ -31,8 +31,8 @@ function PropertyCard({ property, onClick }) {
         <div className="property-card-meta">
           <span>
             {property.bedrooms ? `${property.bedrooms}室` : ''}
-            {property.bedrooms && property.area ? ' | ' : ''}
-            {property.area ? `${property.area}㎡` : ''}
+            {property.bedrooms && property.area_sqm ? ' | ' : ''}
+            {property.area_sqm ? `${property.area_sqm}㎡` : ''}
           </span>
         </div>
         <div className="property-card-footer">
