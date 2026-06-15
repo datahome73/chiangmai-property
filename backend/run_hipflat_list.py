@@ -159,6 +159,29 @@ def save_to_db(properties):
             ).fetchone()
 
             if existing:
+                existing_id = existing[0]
+                # 记录旧价格到 PriceHistory（如果价格有变化）
+                old_prices = session.execute(
+                    text("SELECT price_rent, price_sale FROM properties WHERE id = :id"),
+                    {"id": existing_id},
+                ).fetchone()
+                if old_prices:
+                    old_rent, old_sale = old_prices
+                    new_rent = prop["price"] if prop.get("listing_type") == "RENT" else None
+                    new_sale = prop["price"] if prop.get("listing_type") == "SALE" else None
+                    if (old_rent != new_rent) or (old_sale != new_sale):
+                        session.execute(
+                            text("""INSERT INTO price_history
+                                (property_id, price_rent, price_sale, price_type, source, scraped_at)
+                                VALUES (:pid, :rent, :sale, :ptype, 'hipflat', :now)"""),
+                            {
+                                "pid": existing_id,
+                                "rent": old_rent, "sale": old_sale,
+                                "ptype": prop.get("listing_type", "RENT"),
+                                "now": datetime.utcnow(),
+                            },
+                        )
+                        logger.debug(f"  📊 PriceHistory 记录: {old_rent}/{old_sale} → {new_rent}/{new_sale}")
                 session.execute(
                     text("""UPDATE properties SET
                         title=:title, price_rent=:price_rent, price_sale=:price_sale,
