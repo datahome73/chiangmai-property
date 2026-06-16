@@ -41,7 +41,7 @@ services:
       ENV: production
       DATABASE_URL: postgresql+asyncpg://cmproperty:${DB_PASSWORD:-changeme}@db:5432/cmproperty
       DATABASE_URL_SYNC: postgresql://cmproperty:***@db:5432/cmproperty
-      REDIS_URL: redis://redis:***@db:5432/cmproperty
+      REDIS_URL: redis://redis:6379/0
       SCRAPY_SETTINGS_MODULE: crawlers.settings
       PROXY_ENABLED: ${PROXY_ENABLED:-false}
       PROXY_URL: ${PROXY_URL:-}

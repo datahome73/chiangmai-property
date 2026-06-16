@@ -32,4 +32,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD python3 -c "import urllib.request, os; p=os.environ.get('PORT','8000'); urllib.request.urlopen(f'http://localhost:{p}/health')" || exit 1
 
 # Start
-CMD cd /app/backend && (ls -la /app/frontend-react/dist/ 2>/dev/null && echo "dist OK") || echo "dist NOT FOUND" && python startup.py && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+COPY docker/startup.sh /startup.sh
+RUN chmod +x /startup.sh
+CMD ["/startup.sh"]
