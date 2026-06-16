@@ -209,7 +209,7 @@ def save_to_db(properties):
                          bedrooms, bathrooms, area_sqm, furnished, property_type,
                          address, district, lat, lng, source, source_url, source_id,
                          images, is_active, posted_date, scraped_at, updated_at)
-                        VALUES (:title, :desc, :price_rent, :price_sale, 'USD', :price_type,
+                        VALUES (:title, :desc, :price_rent, :price_sale, 'THB', :price_type,
                          :beds, :baths, :area, 0, :ptype,
                          :addr, :district, NULL, NULL, 'hipflat', :url, :sid,
                          :images, 1, :now, :scraped, :now)"""),

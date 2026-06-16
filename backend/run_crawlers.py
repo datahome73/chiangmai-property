@@ -1,230 +1,124 @@
 #!/usr/bin/env python3
+"""Unified crawler entry point — run all or specific crawlers.
+
+Usage:
+    python backend/run_crawlers.py                    # Run all crawlers (default: incremental)
+    python backend/run_crawlers.py --incremental      # Skip recently crawled sources
+    python backend/run_crawlers.py --full             # Full crawl of all sources
+    python backend/run_crawlers.py --source hipflat   # Run single source
 """
-清迈房产比价平台 — 爬虫运行脚本
-
-一键运行所有爬虫，或指定特定爬虫。
-支持 Playwright 渲染和数据库写入。
-
-用法:
-    python run_crawlers.py                              # 运行全部爬虫
-    python run_crawlers.py --spider ddproperty          # 仅运行 ddproperty
-    python run_crawlers.py --spider hipflat,fazwaz      # 仅运行 hipflat + fazwaz
-    python run_crawlers.py --pages 5                    # 每站只抓5页
-    python run_crawlers.py --sale                       # 仅抓出售
-    python run_crawlers.py --rent                       # 仅抓出租（默认）
-    python run_crawlers.py --both                       # 抓出租+出售
-"""
-
 import argparse
+import json
 import logging
 import os
 import sys
 import time
-import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("crawler-runner")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+logger = logging.getLogger("run-crawlers")
+
+# ── Crawler registry ─────────────────────────────────────────────
+
+CRAWLERS = []
 
 
-def check_database_connection():
-    """Verify database is accessible before starting."""
-    try:
-        from crawlers.settings import DATABASE_URL as db_url
-        from sqlalchemy import create_engine, text
+def _register_crawlers():
+    global CRAWLERS
+    from proxy_crawler.hipflat_crawler import HipflatCrawler
+    from proxy_crawler.fazwaz_crawler import FazwazCrawler
+    from proxy_crawler.livingstock_crawler import LivingstockCrawler
+    CRAWLERS = [
+        HipflatCrawler(),
+        FazwazCrawler(),
+        LivingstockCrawler(),
+    ]
 
-        if not db_url:
-            logger.warning("⚠️  DATABASE_URL 未设置，跳过数据库检查")
-            return True
 
-        # Use psycopg2 for sync connection check
-        check_url = db_url
-        if check_url.startswith("postgresql+asyncpg://"):
-            check_url = check_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+# ── Stats ────────────────────────────────────────────────────────
 
-        engine = create_engine(check_url, echo=False)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        engine.dispose()
-        logger.info("✅ 数据库连接正常")
-        return True
-    except Exception as e:
-        logger.error("❌ 数据库连接失败: %s", e)
-        logger.warning("   爬虫将继续运行，但数据可能无法写入数据库")
+
+def _save_stats(all_stats: list[dict]) -> None:
+    """Save crawl stats to data/crawl_stats_YYYYMMDD.json"""
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    os.makedirs(data_dir, exist_ok=True)
+    path = os.path.join(data_dir, f"crawl_stats_{datetime.utcnow().strftime('%Y%m%d')}.json")
+    existing = []
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+    existing.append({
+        "timestamp": datetime.utcnow().isoformat(),
+        "sources": all_stats,
+    })
+    with open(path, "w") as f:
+        json.dump(existing, f, indent=2, ensure_ascii=False)
+    logger.info("Stats saved to %s", path)
+
+
+def _should_skip(source: str, incremental: bool) -> bool:
+    """Check if source was crawled recently (within 6 hours)."""
+    if not incremental:
         return False
-
-
-def verify_dependencies():
-    """Check required packages and tools."""
-    missing = []
-
-    try:
-        import scrapy  # noqa
-    except ImportError:
-        missing.append("scrapy")
-
-    try:
-        import sqlalchemy  # noqa
-    except ImportError:
-        missing.append("sqlalchemy")
-
-    try:
-        import httpx  # noqa
-    except ImportError:
-        missing.append("httpx")
-
-    if missing:
-        logger.error("❌ 缺少依赖包: %s", ", ".join(missing))
-        logger.error("   请运行: pip install %s", " ".join(missing))
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    stats_path = os.path.join(data_dir, f"crawl_stats_{datetime.utcnow().strftime('%Y%m%d')}.json")
+    if not os.path.exists(stats_path):
         return False
-
-    return True
+    try:
+        with open(stats_path) as f:
+            stats = json.load(f)
+        for entry in reversed(stats):
+            for s in entry.get("sources", []):
+                if s.get("source") == source:
+                    ts = datetime.fromisoformat(entry["timestamp"])
+                    if datetime.utcnow() - ts < timedelta(hours=6):
+                        logger.info("Skipping %s (crawled at %s)", source, ts.isoformat())
+                        return True
+    except Exception:
+        pass
+    return False
 
 
 def main():
-    parser = argparse.ArgumentParser(description="运行清迈房产爬虫")
-    parser.add_argument("--spider", "-s", default="all",
-                        help="爬虫名称: ddproperty, hipflat, fazwaz, 或 all (默认)")
-    parser.add_argument("--pages", "-p", type=int, default=5,
-                        help="每站最大抓取页数 (默认: 5)")
-    parser.add_argument("--rent", action="store_true", default=True,
-                        help="抓取出租房源")
-    parser.add_argument("--sale", action="store_true", default=False,
-                        help="抓取出售房源")
-    parser.add_argument("--both", action="store_true", default=False,
-                        help="抓取出租+出售")
-    parser.add_argument("--output", "-o", default=None,
-                        help="输出文件 (JSON/CSV)，默认写入数据库")
-    parser.add_argument("--playwright", action="store_true", default=True,
-                        help="使用 Playwright 渲染 JS (默认开启)")
-    parser.add_argument("--skip-db-check", action="store_true", default=False,
-                        help="跳过数据库连接检查")
-    parser.add_argument("--timeout", type=int, default=600,
-                        help="爬虫超时时间（秒，默认: 600）")
+    parser = argparse.ArgumentParser(description="Run property crawlers")
+    parser.add_argument("--incremental", action="store_true", help="Skip recently crawled")
+    parser.add_argument("--full", action="store_true", help="Full crawl of all")
+    parser.add_argument("--source", type=str, help="Run single source by name")
     args = parser.parse_args()
 
-    # ── Pre-flight checks ──────────────────────────────
-    logger.info("=" * 60)
-    logger.info("🏠 清迈房产爬虫启动")
-    logger.info(f"   时间: {datetime.now().isoformat()}")
+    _register_crawlers()
+    incremental = args.incremental or not args.full
+    all_stats = []
 
-    if not verify_dependencies():
-        sys.exit(1)
-
-    if not args.skip_db_check and not args.output:
-        check_database_connection()
-
-    # Resolve listing types
-    listing_types = ["rent"]
-    if args.sale:
-        listing_types = ["sale"]
-    if args.both:
-        listing_types = ["rent", "sale"]
-
-    # Determine spiders to run
-    if args.spider == "all":
-        spider_names = ["ddproperty", "hipflat", "fazwaz"]
-    else:
-        spider_names = [s.strip() for s in args.spider.split(",")]
-
-    # Log summary
-    logger.info(f"   爬虫: {', '.join(spider_names)}")
-    logger.info(f"   类型: {', '.join(listing_types)}")
-    logger.info(f"   最大页数: {args.pages}")
-    logger.info(f"   Playwright: {'✅' if args.playwright else '❌'}")
-    logger.info(f"   超时: {args.timeout}s")
-    logger.info(f"   输出: {'数据库' if not args.output else args.output}")
-    logger.info("=" * 60)
-
-    # Verify Playwright availability
-    playwright_ok = False
-    if args.playwright:
-        try:
-            from playwright.sync_api import sync_playwright
-            p = sync_playwright().start()
-            browser = p.chromium.launch(headless=True, timeout=10000)
-            browser.close()
-            p.stop()
-            playwright_ok = True
-            logger.info("✅ Playwright Chromium 可用")
-        except Exception as e:
-            logger.warning("⚠️  Playwright 不可用 (%s)，将尝试 HTTP 模式", e)
-
-    # ── Run spiders ───────────────────────────────────
-    os.environ.setdefault("SCRAPY_SETTINGS_MODULE", "crawlers.settings")
-
-    from scrapy.crawler import CrawlerProcess
-    from scrapy.utils.project import get_project_settings
-
-    settings = get_project_settings()
-
-    # Apply runtime overrides
-    if args.timeout:
-        settings.set("DOWNLOAD_TIMEOUT", min(args.timeout, 120))
-
-    process = CrawlerProcess(settings)
-
-    # Import spider classes
-    from crawlers.spiders.ddproperty import DdpropertySpider
-    from crawlers.spiders.hipflat import HipflatSpider
-    from crawlers.spiders.fazwaz import FazwazSpider
-
-    spider_map = {
-        "ddproperty": DdpropertySpider,
-        "hipflat": HipflatSpider,
-        "fazwaz": FazwazSpider,
-    }
-
-    results = {}
-    start_time = time.time()
-
-    for name in spider_names:
-        if name not in spider_map:
-            logger.warning("⚠️  未知爬虫: %s (可选: %s)", name, ", ".join(spider_map.keys()))
+    for crawler in CRAWLERS:
+        if args.source and crawler.SOURCE != args.source:
+            continue
+        if _should_skip(crawler.SOURCE, incremental):
             continue
 
-        spider_start = time.time()
-        logger.info("🚀 启动爬虫: %s", name)
+        logger.info("=" * 50)
+        logger.info("Starting crawl: %s", crawler.SOURCE)
         try:
-            process.crawl(
-                spider_map[name],
-                rent="rent" in listing_types,
-                sale="sale" in listing_types,
-                max_pages=args.pages,
+            stats = crawler.crawl()
+            all_stats.append(stats)
+            logger.info(
+                "Done: %s — new=%d updated=%d errors=%d (%.1fs)",
+                stats["source"], stats["new"], stats["updated"],
+                len(stats["errors"]), stats["duration_seconds"],
             )
-            duration = time.time() - spider_start
-            results[name] = {"status": "crawled", "duration": f"{duration:.1f}s"}
         except Exception as e:
-            logger.error("❌ 爬虫 %s 启动失败: %s", name, e)
-            logger.debug(traceback.format_exc())
-            results[name] = {"status": f"failed: {e}", "duration": "0s"}
+            logger.error("Crawl failed for %s: %s", crawler.SOURCE, e)
+            all_stats.append({"source": crawler.SOURCE, "error": str(e)[:200]})
 
-    # Execute all queued spiders
-    try:
-        process.start()
-    except Exception as e:
-        logger.error("❌ 爬虫执行异常: %s", e)
-        logger.debug(traceback.format_exc())
-        for name in spider_names:
-            if name not in results:
-                results[name] = {"status": "crashed", "duration": "0s"}
-            elif results[name]["status"] == "crawled":
-                results[name]["status"] = "crashed during execution"
-    finally:
-        total_duration = time.time() - start_time
+    if all_stats:
+        _save_stats(all_stats)
 
-    # ── Summary ───────────────────────────────────────
-    logger.info("=" * 60)
-    logger.info("📊 爬虫运行报告")
-    logger.info(f"   总耗时: {total_duration:.1f}s")
-    for name, result in results.items():
-        status_icon = "✅" if "crawled" in result["status"] else "❌"
-        logger.info(f"   {status_icon} {name}: {result['status']} ({result.get('duration', '?')})")
-    logger.info("=" * 60)
+    logger.info("All crawls complete.")
 
 
 if __name__ == "__main__":
