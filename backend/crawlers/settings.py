@@ -71,7 +71,7 @@ DATABASE_URL = os.environ.get(
     f"sqlite:///{os.path.join(PROJECT_ROOT, 'cmproperty.db')}",
 )
 if DATABASE_URL and "mysql+" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("mysql+asyncmy://", "mysql+pymysql://")
+    DATABASE_URL = DATABASE_URL.replace("mysql+aiomysql://", "mysql+pymysql://")
 
 # ─── Other ────────────────────────────────────────────────
 FEED_EXPORT_ENCODING = "utf-8"
