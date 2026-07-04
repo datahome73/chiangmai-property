@@ -2,7 +2,6 @@ import datetime
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, Text, Enum as SAEnum, ForeignKey
 from sqlalchemy.orm import relationship
 from app.core.database import Base
-from app.core.config import settings
 import enum
 
 
@@ -18,13 +17,6 @@ class PropertyType(str, enum.Enum):
     TOWNHOUSE = "townhouse"
     APARTMENT = "apartment"
     OTHER = "other"
-
-
-# Conditionally add PostGIS geometry only for PostgreSQL
-extra_columns = {}
-if settings.ENV == "production" and "postgresql" in settings.DATABASE_URL:
-    from geoalchemy2 import Geometry
-    extra_columns["location"] = Column("location", Geometry("POINT", srid=4326), nullable=True)
 
 
 class Property(Base):

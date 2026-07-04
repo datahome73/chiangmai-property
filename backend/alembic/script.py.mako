@@ -7,7 +7,6 @@ Create Date: ${create_date}
 from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
-import geoalchemy2
 ${imports if imports else ""}
 
 revision: str = ${repr(up_revision)}

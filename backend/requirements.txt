@@ -6,9 +6,9 @@ pydantic-settings==2.1.0
 
 # Database
 sqlalchemy[asyncio]==2.0.25
-asyncpg==0.29.0
+aiomysql==0.2.0
+pymysql==1.1.0
 alembic==1.13.1
-geoalchemy2==0.14.3
 
 # Auth
 python-jose[cryptography]==3.3.0
